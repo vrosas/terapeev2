@@ -1,202 +1,911 @@
-import { useState, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
-  Calendar, ChevronLeft, ChevronRight, Plus, Clock, MapPin,
-  Video, User, Phone, CheckCircle2, XCircle, AlertCircle, Edit3, Trash2,
+  AlertCircle, ArrowLeft, ArrowRight, Ban, Bell, Building2, Calendar, Check,
+  CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock, Command,
+  DollarSign, Eye, FileBarChart, FileText, Filter, LayoutDashboard, Loader2,
+  LogOut, MapPin, MessageSquare, MoreHorizontal, Phone, Plus, RefreshCw,
+  Repeat, Search, Settings, Stethoscope, Timer, User, Users, Video, X, XCircle
 } from 'lucide-react'
+import { Bar, BarChart, Legend, Line } from 'recharts'
 import { T } from '@/utils/theme'
-import { useAppointments, usePatients, useProfessionals } from '@/lib/hooks'
-import {
-  Card, Badge, Button, InputField, SelectField, TextArea,
-  Modal, ConfirmDialog, LoadingSpinner, Avatar,
-} from '@/components/ui'
+import { Badge } from '@/components/ui'
 
-const HOURS = Array.from({ length: 13 }, (_, i) => i + 7)
-const DAYS_LABEL = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
-const STATUS_COLORS = {
-  scheduled: { bg: '#FEF3C7', border: '#F59E0B', text: '#92400E', label: 'Agendado' },
-  confirmed: { bg: '#D1FAE5', border: '#10B981', text: '#065F46', label: 'Confirmado' },
-  in_progress: { bg: '#DBEAFE', border: '#3B82F6', text: '#1E40AF', label: 'Em andamento' },
-  completed: { bg: '#E0E7FF', border: '#6366F1', text: '#3730A3', label: 'Concluído' },
-  cancelled: { bg: '#FEE2E2', border: '#EF4444', text: '#991B1B', label: 'Cancelado' },
-  no_show: { bg: '#F3F4F6', border: '#9CA3AF', text: '#374151', label: 'Faltou' },
+  LayoutDashboard, Calendar, Users, FileText, MessageSquare, DollarSign,
+  Settings, Search, Bell, ChevronLeft, ChevronRight, LogOut, User,
+  Clock, CheckCircle2, AlertCircle, XCircle, X, Command, FileBarChart,
+  Stethoscope, Building2, RefreshCw, Timer, Check, Video, MapPin,
+  Plus, ChevronDown, Repeat, ArrowRight, ArrowLeft, Loader2, Phone,
+  MoreHorizontal, Filter, Eye, Ban
+
+/* ─── Design Tokens ─── */
+/* ─── Status ─── */
+const STATUS = {
+  pendente:      { label: "Pendente",      color: T.warning, bg: "rgba(245,158,11,0.10)", icon: Clock },
+  confirmado:    { label: "Confirmado",    color: T.success, bg: "rgba(22,163,74,0.10)", icon: CheckCircle2 },
+  cancelado:     { label: "Cancelado",     color: T.error,   bg: "rgba(220,38,38,0.10)", icon: XCircle },
+  reagendar:     { label: "Reagendar",     color: T.orange,  bg: "rgba(249,115,22,0.10)", icon: RefreshCw },
+  sem_resposta:  { label: "Sem resposta",  color: T.n400,    bg: "rgba(201,205,216,0.18)", icon: Timer },
+  realizado:     { label: "Realizado",     color: T.info,    bg: "rgba(37,99,235,0.10)", icon: Check },
+};
+
+/* ─── Professionals ─── */
+const PROFESSIONALS = [
+  { id: 1, name: "Dra. Ana Costa",       short: "Ana",     specialty: "Psicologia",       color: "#3F6BFF" },
+  { id: 2, name: "Dr. Carlos Lima",      short: "Carlos",  specialty: "Fisioterapia",     color: "#16A34A" },
+  { id: 3, name: "Dra. Beatriz Rocha",   short: "Beatriz", specialty: "Fonoaudiologia",   color: "#F59E0B" },
+  { id: 4, name: "Dr. Ricardo Alves",    short: "Ricardo", specialty: "Terapia Ocupacional", color: "#9333EA" },
+];
+
+const SERVICES = [
+  { id: 1, name: "Psicoterapia", duration: 50, price: 180 },
+  { id: 2, name: "Fisioterapia", duration: 45, price: 150 },
+  { id: 3, name: "Fonoaudiologia", duration: 30, price: 130 },
+  { id: 4, name: "Terapia Ocupacional", duration: 45, price: 160 },
+  { id: 5, name: "Avaliação Neuropsicológica", duration: 90, price: 350 },
+];
+
+const PATIENTS = [
+  "Maria Silva", "João Pereira", "Lucia Fernandes", "Pedro Santos",
+  "Ana Oliveira", "Roberto Gomes", "Fernanda Dias", "Marcos Ribeiro",
+  "Camila Souza", "Bruno Almeida", "Juliana Castro", "Diego Martins",
+];
+
+/* ─── Generate weekly appointments ─── */
+function generateAppointments(weekStart) {
+  const appts = [];
+  const statuses = ["confirmado", "pendente", "sem_resposta", "confirmado", "confirmado", "pendente", "reagendar", "cancelado"];
+  const types = ["presencial", "presencial", "presencial", "online", "presencial"];
+  let id = 1;
+
+  for (let d = 0; d < 6; d++) {
+    const date = new Date(weekStart);
+    date.setDate(date.getDate() + d);
+    const dateStr = date.toISOString().split("T")[0];
+    const numAppts = d === 5 ? 4 : 6 + Math.floor(Math.random() * 4);
+
+    for (let a = 0; a < numAppts; a++) {
+      const prof = PROFESSIONALS[a % PROFESSIONALS.length];
+      const service = SERVICES[a % SERVICES.length];
+      const hour = 8 + Math.floor(a * 1.5);
+      if (hour >= 18) continue;
+      const minutes = a % 2 === 0 ? 0 : 30;
+
+      appts.push({
+        id: id++,
+        date: dateStr,
+        time: `${String(hour).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`,
+        hour, minutes,
+        patient: PATIENTS[a % PATIENTS.length],
+        professional: prof,
+        service: service,
+        type: types[a % types.length],
+        status: statuses[a % statuses.length],
+        duration: service.duration,
+      });
+    }
+  }
+  return appts;
 }
 
-const INIT = { patient_id: '', professional_id: '', date: '', start_time: '', end_time: '', type: 'regular', modality: 'in_person', room: '', price: '', notes: '' }
+/* ─── Date Helpers ─── */
+function getMonday(d) {
+  const date = new Date(d);
+  const day = date.getDay();
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+  date.setDate(diff);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
 
-export default function AgendaContent() {
-  const { data: appointments, loading, create, update, remove } = useAppointments()
-  const { data: patients } = usePatients()
-  const { data: professionals } = useProfessionals()
-  const [weekOffset, setWeekOffset] = useState(0)
-  const [profFilter, setProfFilter] = useState('')
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editId, setEditId] = useState(null)
-  const [detailApt, setDetailApt] = useState(null)
-  const [deleteId, setDeleteId] = useState(null)
-  const [form, setForm] = useState(INIT)
-  const [saving, setSaving] = useState(false)
+function formatDateBR(d) {
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+}
 
-  const weekDates = useMemo(() => {
-    const today = new Date(); const start = new Date(today)
-    start.setDate(today.getDate() - today.getDay() + 1 + weekOffset * 7)
-    return Array.from({ length: 7 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d })
-  }, [weekOffset])
+function formatDateFull(d) {
+  return d.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+}
 
-  const weekLabel = useMemo(() => {
-    const s = weekDates[0], e = weekDates[6]
-    const mS = s.toLocaleDateString('pt-BR', { month: 'short' }), mE = e.toLocaleDateString('pt-BR', { month: 'short' })
-    return mS === mE ? `${s.getDate()} – ${e.getDate()} de ${mS} ${s.getFullYear()}` : `${s.getDate()} ${mS} – ${e.getDate()} ${mE} ${s.getFullYear()}`
-  }, [weekDates])
+function dayName(d) {
+  return d.toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", "");
+}
 
-  const weekAppts = useMemo(() => {
-    const start = weekDates[0].toISOString().split('T')[0]
-    const end = new Date(weekDates[6]); end.setDate(end.getDate() + 1); const endStr = end.toISOString().split('T')[0]
-    return appointments.filter((a) => { const d = a.start_time?.split('T')[0]; if (d < start || d >= endStr) return false; if (profFilter && a.professional_id !== profFilter) return false; return true })
-  }, [appointments, weekDates, profFilter])
+function isSameDay(d1, d2) {
+  return d1.toISOString().split("T")[0] === d2.toISOString().split("T")[0];
+}
 
-  const getAptsForCell = (dayDate, hour) => {
-    const dateStr = dayDate.toISOString().split('T')[0]
-    return weekAppts.filter((a) => a.start_time?.split('T')[0] === dateStr && new Date(a.start_time).getHours() === hour)
-  }
-  const isToday = (d) => d.toISOString().split('T')[0] === new Date().toISOString().split('T')[0]
+function isToday(d) {
+  return isSameDay(d, new Date());
+}
 
-  const openCreate = (dayDate, hour) => {
-    const dateStr = dayDate.toISOString().split('T')[0]
-    setEditId(null); setForm({ ...INIT, date: dateStr, start_time: `${String(hour).padStart(2, '0')}:00`, end_time: `${String(hour).padStart(2, '0')}:50` }); setModalOpen(true)
-  }
-  const openEdit = (apt) => {
-    setEditId(apt.id); const st = new Date(apt.start_time), et = new Date(apt.end_time)
-    setForm({ patient_id: apt.patient_id || '', professional_id: apt.professional_id || '', date: apt.start_time?.split('T')[0] || '', start_time: `${String(st.getHours()).padStart(2, '0')}:${String(st.getMinutes()).padStart(2, '0')}`, end_time: `${String(et.getHours()).padStart(2, '0')}:${String(et.getMinutes()).padStart(2, '0')}`, type: apt.type || 'regular', modality: apt.modality || 'in_person', room: apt.room || '', price: apt.price?.toString() || '', notes: apt.notes || '' })
-    setDetailApt(null); setModalOpen(true)
-  }
-  const handleSave = async () => {
-    if (!form.patient_id || !form.professional_id || !form.date) return; setSaving(true)
-    const payload = { patient_id: form.patient_id, professional_id: form.professional_id, start_time: `${form.date}T${form.start_time}:00`, end_time: `${form.date}T${form.end_time}:00`, type: form.type, modality: form.modality, room: form.room || null, price: form.price ? parseFloat(form.price) : null, notes: form.notes || null }
-    if (editId) { await update(editId, payload) } else { payload.status = 'scheduled'; await create(payload) }
-    setSaving(false); setModalOpen(false)
-  }
-  const updateStatus = async (id, status) => { await update(id, { status }); setDetailApt(null) }
+/* ─── Hours array ─── */
+const HOURS = [];
+for (let h = 7; h <= 19; h++) {
+  HOURS.push({ hour: h, label: `${String(h).padStart(2, "0")}:00` });
+}
 
-  if (loading) return <LoadingSpinner />
+/* ═══════════════ SIDEBAR (same shell) ═══════════════ */
+
+/* ═══════════════ STATUS BADGE ═══════════════ */
+function StatusBadge({ status, small, onClick }) {
+  const s = STATUS[status] || STATUS.pendente;
+  const Icon = s.icon;
+  return (
+    <span onClick={onClick} style={{
+      display: "inline-flex", alignItems: "center", gap: 4,
+      padding: small ? "2px 7px" : "4px 10px",
+      borderRadius: 20, background: s.bg, color: s.color,
+      fontSize: small ? 10 : 12, fontWeight: 500, whiteSpace: "nowrap",
+      cursor: onClick ? "pointer" : "default",
+      transition: "all 150ms",
+    }}>
+      <Icon size={small ? 10 : 12} />
+      {s.label}
+    </span>
+  );
+}
+
+/* ═══════════════ APPOINTMENT CARD (Day view) ═══════════════ */
+function AppointmentBlock({ apt, onClick, slotHeight }) {
+  const durationSlots = apt.duration / 15;
+  const height = durationSlots * slotHeight - 4;
+  const prof = apt.professional;
+  const statusConf = STATUS[apt.status];
 
   return (
-    <div style={{ padding: '24px 28px', animation: 'fadeSlideUp 0.25s ease both' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <button onClick={() => setWeekOffset(w => w - 1)} style={navBtn}><ChevronLeft size={16} /></button>
-            <button onClick={() => setWeekOffset(0)} style={{ padding: '6px 14px', borderRadius: T.radiusMd, border: `1px solid ${T.n300}`, background: weekOffset === 0 ? T.primary50 : T.n0, cursor: 'pointer', fontFamily: T.font, fontSize: 13, fontWeight: 500, color: weekOffset === 0 ? T.primary500 : T.n700 }}>Hoje</button>
-            <button onClick={() => setWeekOffset(w => w + 1)} style={navBtn}><ChevronRight size={16} /></button>
-          </div>
-          <span style={{ fontSize: 16, fontWeight: 600 }}>{weekLabel}</span>
+    <div onClick={() => onClick(apt)} style={{
+      position: "absolute",
+      top: (apt.minutes / 15) * slotHeight + 2,
+      left: 4, right: 4, height,
+      background: T.n0,
+      borderLeft: `3px solid ${prof.color}`,
+      borderRadius: T.radiusMd,
+      padding: "8px 10px",
+      cursor: "pointer",
+      boxShadow: T.shadowSoft,
+      border: `1px solid ${T.n200}`,
+      overflow: "hidden",
+      transition: "box-shadow 200ms, transform 150ms",
+      opacity: apt.status === "cancelado" ? 0.5 : 1,
+      zIndex: 2,
+    }}
+      onMouseEnter={e => { e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)"; e.currentTarget.style.transform = "scale(1.01)"; }}
+      onMouseLeave={e => { e.currentTarget.style.boxShadow = T.shadowSoft; e.currentTarget.style.transform = "none"; }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: T.n900, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {apt.patient}
+        </span>
+        {apt.type === "online" && <Video size={12} color={T.info} style={{ flexShrink: 0 }} />}
+      </div>
+      {height > 44 && (
+        <div style={{ fontSize: 11, color: T.n400, marginTop: 3, display: "flex", alignItems: "center", gap: 4 }}>
+          <span>{apt.service.name}</span>
+          <span>·</span>
+          <span>{apt.duration}min</span>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <select value={profFilter} onChange={(e) => setProfFilter(e.target.value)} style={{ padding: '8px 12px', borderRadius: T.radiusMd, border: `1px solid ${T.n300}`, fontSize: 13, fontFamily: T.font, background: T.n0 }}>
-            <option value="">Todos profissionais</option>
-            {professionals.map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
-          </select>
-          <Button icon={Plus} onClick={() => { setEditId(null); setForm(INIT); setModalOpen(true) }}>Nova consulta</Button>
+      )}
+      {height > 64 && (
+        <div style={{ marginTop: 6 }}>
+          <StatusBadge status={apt.status} small />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════ APPOINTMENT CREATION / DETAIL MODAL ═══════════════ */
+function AppointmentModal({ open, onClose, appointment, selectedSlot, appointments }) {
+  const [form, setForm] = useState({
+    patient: "", professional: "", service: "", type: "presencial",
+    date: "", time: "", recurrence: "none", recurrenceEnd: "",
+  });
+  const [patientSearch, setPatientSearch] = useState("");
+  const [showPatientList, setShowPatientList] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [conflict, setConflict] = useState(null);
+
+  const isNew = !appointment;
+
+  useEffect(() => {
+    if (appointment) {
+      setForm({
+        patient: appointment.patient,
+        professional: String(appointment.professional.id),
+        service: String(appointment.service.id),
+        type: appointment.type,
+        date: appointment.date,
+        time: appointment.time,
+        recurrence: "none", recurrenceEnd: "",
+      });
+      setPatientSearch(appointment.patient);
+    } else if (selectedSlot) {
+      setForm(f => ({
+        ...f, patient: "", professional: selectedSlot.professionalId ? String(selectedSlot.professionalId) : "",
+        service: "", date: selectedSlot.date, time: selectedSlot.time,
+        recurrence: "none", recurrenceEnd: "",
+      }));
+      setPatientSearch("");
+    } else {
+      setForm({ patient: "", professional: "", service: "", type: "presencial", date: "", time: "", recurrence: "none", recurrenceEnd: "" });
+      setPatientSearch("");
+    }
+    setConflict(null);
+  }, [appointment, selectedSlot, open]);
+
+  const filteredPatients = patientSearch.length > 0
+    ? PATIENTS.filter(p => p.toLowerCase().includes(patientSearch.toLowerCase()))
+    : PATIENTS;
+
+  const handleSave = () => {
+    // Check conflict
+    if (form.professional && form.date && form.time) {
+      const existing = appointments?.find(a =>
+        a.date === form.date && a.time === form.time &&
+        String(a.professional.id) === form.professional &&
+        a.status !== "cancelado" &&
+        (!appointment || a.id !== appointment.id)
+      );
+      if (existing) {
+        setConflict(existing);
+        return;
+      }
+    }
+    setSaving(true);
+    setTimeout(() => { setSaving(false); onClose("saved"); }, 1000);
+  };
+
+  if (!open) return null;
+
+  const inputStyle = {
+    width: "100%", padding: "10px 12px", border: `1.5px solid ${T.n300}`,
+    borderRadius: T.radiusMd, fontSize: 14, fontFamily: T.font, color: T.n900,
+    outline: "none", transition: "border 200ms", boxSizing: "border-box",
+    background: T.n0,
+  };
+  const labelStyle = { display: "block", fontSize: 13, fontWeight: 500, color: T.n700, marginBottom: 5 };
+  const fieldWrap = { marginBottom: 16 };
+
+  return (
+    <div onClick={() => onClose()} style={{
+      position: "fixed", inset: 0, background: "rgba(17,17,17,0.4)", zIndex: 1000,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      backdropFilter: "blur(4px)", animation: "fadeIn 150ms ease",
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        width: "100%", maxWidth: 520, background: T.n0, borderRadius: T.radiusLg,
+        boxShadow: T.shadowLg, overflow: "hidden", animation: "slideUp 250ms ease",
+        maxHeight: "90vh", display: "flex", flexDirection: "column",
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: "20px 24px", borderBottom: `1px solid ${T.n200}`,
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+        }}>
+          <h2 style={{ fontSize: 18, fontWeight: 700 }}>
+            {isNew ? "Novo agendamento" : `Agendamento — ${appointment.patient}`}
+          </h2>
+          <button onClick={() => onClose()} style={{
+            width: 32, height: 32, borderRadius: 8, border: "none", cursor: "pointer",
+            background: "transparent", display: "flex", alignItems: "center", justifyContent: "center",
+            color: T.n400, transition: "all 150ms",
+          }}
+            onMouseEnter={e => { e.currentTarget.style.background = T.n100; e.currentTarget.style.color = T.n700; }}
+            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.n400; }}>
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: "20px 24px", overflowY: "auto", flex: 1 }}>
+          {/* Conflict warning */}
+          {conflict && (
+            <div style={{
+              background: "rgba(220,38,38,0.06)", border: `1px solid rgba(220,38,38,0.2)`,
+              borderRadius: T.radiusMd, padding: "14px 16px", marginBottom: 18,
+              display: "flex", gap: 10, alignItems: "flex-start",
+            }}>
+              <AlertCircle size={18} color={T.error} style={{ flexShrink: 0, marginTop: 2 }} />
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: T.error, marginBottom: 4 }}>Conflito de horário</div>
+                <div style={{ fontSize: 13, color: T.n700, lineHeight: 1.5 }}>
+                  {conflict.professional.name} já possui um agendamento com <strong>{conflict.patient}</strong> neste horário ({conflict.time} — {conflict.service.name}).
+                </div>
+                <button onClick={() => setConflict(null)} style={{
+                  marginTop: 8, fontSize: 12, fontWeight: 500, color: T.primary500,
+                  background: "none", border: "none", cursor: "pointer", fontFamily: T.font, padding: 0,
+                }}>Escolher outro horário</button>
+              </div>
+            </div>
+          )}
+
+          {/* Patient search */}
+          <div style={{ ...fieldWrap, position: "relative" }}>
+            <label style={labelStyle}>Paciente *</label>
+            <div style={{ position: "relative" }}>
+              <input
+                style={inputStyle}
+                placeholder="Buscar por nome..."
+                value={patientSearch}
+                onChange={e => { setPatientSearch(e.target.value); setShowPatientList(true); setForm(f => ({ ...f, patient: "" })); }}
+                onFocus={() => setShowPatientList(true)}
+                onBlur={() => setTimeout(() => setShowPatientList(false), 200)}
+              />
+              <Search size={16} color={T.n400} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)" }} />
+            </div>
+            {showPatientList && patientSearch && (
+              <div style={{
+                position: "absolute", top: "100%", left: 0, right: 0, zIndex: 10,
+                background: T.n0, border: `1px solid ${T.n200}`, borderRadius: T.radiusMd,
+                boxShadow: T.shadowMd, maxHeight: 180, overflowY: "auto", marginTop: 4,
+              }}>
+                {filteredPatients.length === 0 ? (
+                  <div style={{ padding: "12px 14px", fontSize: 13, color: T.n400 }}>Nenhum paciente encontrado</div>
+                ) : filteredPatients.slice(0, 6).map((p, i) => (
+                  <button key={i} onMouseDown={() => { setPatientSearch(p); setForm(f => ({ ...f, patient: p })); setShowPatientList(false); }}
+                    style={{
+                      width: "100%", padding: "10px 14px", border: "none", background: "transparent",
+                      cursor: "pointer", fontFamily: T.font, fontSize: 13, color: T.n900, textAlign: "left",
+                      display: "flex", alignItems: "center", gap: 8, transition: "background 100ms",
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = T.n100}
+                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                    <Users size={14} color={T.n400} /> {p}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Professional + Service */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div style={fieldWrap}>
+              <label style={labelStyle}>Profissional *</label>
+              <select value={form.professional} onChange={e => setForm(f => ({ ...f, professional: e.target.value }))}
+                style={{ ...inputStyle, cursor: "pointer", appearance: "auto" }}>
+                <option value="">Selecionar...</option>
+                {PROFESSIONALS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+            <div style={fieldWrap}>
+              <label style={labelStyle}>Serviço *</label>
+              <select value={form.service} onChange={e => setForm(f => ({ ...f, service: e.target.value }))}
+                style={{ ...inputStyle, cursor: "pointer", appearance: "auto" }}>
+                <option value="">Selecionar...</option>
+                {SERVICES.map(sv => <option key={sv.id} value={sv.id}>{sv.name} ({sv.duration}min)</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* Date + Time */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div style={fieldWrap}>
+              <label style={labelStyle}>Data *</label>
+              <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                style={inputStyle} />
+            </div>
+            <div style={fieldWrap}>
+              <label style={labelStyle}>Horário *</label>
+              <input type="time" value={form.time} onChange={e => setForm(f => ({ ...f, time: e.target.value }))}
+                style={inputStyle} />
+            </div>
+          </div>
+
+          {/* Type */}
+          <div style={fieldWrap}>
+            <label style={labelStyle}>Tipo</label>
+            <div style={{ display: "flex", gap: 10 }}>
+              {[
+                { id: "presencial", label: "Presencial", icon: MapPin },
+                { id: "online", label: "Online", icon: Video },
+              ].map(t => (
+                <button key={t.id} onClick={() => setForm(f => ({ ...f, type: t.id }))}
+                  style={{
+                    flex: 1, padding: "11px 14px", borderRadius: T.radiusMd, cursor: "pointer",
+                    border: `2px solid ${form.type === t.id ? T.primary500 : T.n300}`,
+                    background: form.type === t.id ? T.primary50 : T.n0,
+                    color: form.type === t.id ? T.primary500 : T.n700,
+                    fontFamily: T.font, fontSize: 13, fontWeight: 500,
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                    transition: "all 200ms",
+                  }}>
+                  <t.icon size={15} /> {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Recurrence */}
+          <div style={fieldWrap}>
+            <label style={labelStyle}>Recorrência</label>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {[
+                { id: "none", label: "Nenhuma" },
+                { id: "weekly", label: "Semanal" },
+                { id: "biweekly", label: "Quinzenal" },
+                { id: "monthly", label: "Mensal" },
+              ].map(r => (
+                <button key={r.id} onClick={() => setForm(f => ({ ...f, recurrence: r.id }))}
+                  style={{
+                    padding: "7px 14px", borderRadius: 20, cursor: "pointer",
+                    border: `1.5px solid ${form.recurrence === r.id ? T.primary500 : T.n300}`,
+                    background: form.recurrence === r.id ? T.primary50 : T.n0,
+                    color: form.recurrence === r.id ? T.primary500 : T.n700,
+                    fontFamily: T.font, fontSize: 12, fontWeight: 500,
+                    transition: "all 200ms",
+                  }}>
+                  {r.id !== "none" && <Repeat size={11} style={{ marginRight: 4, verticalAlign: -1 }} />}
+                  {r.label}
+                </button>
+              ))}
+            </div>
+            {form.recurrence !== "none" && (
+              <div style={{ marginTop: 10 }}>
+                <label style={{ ...labelStyle, fontSize: 12 }}>Data de término da recorrência</label>
+                <input type="date" value={form.recurrenceEnd} onChange={e => setForm(f => ({ ...f, recurrenceEnd: e.target.value }))}
+                  style={{ ...inputStyle, maxWidth: 200 }} />
+              </div>
+            )}
+          </div>
+
+          {/* Status selector (only for existing) */}
+          {!isNew && (
+            <div style={fieldWrap}>
+              <label style={labelStyle}>Status</label>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {Object.entries(STATUS).map(([key, s]) => {
+                  const Icon = s.icon;
+                  const isActive = appointment.status === key;
+                  return (
+                    <button key={key} style={{
+                      display: "flex", alignItems: "center", gap: 5, padding: "6px 12px",
+                      borderRadius: 20, border: `1.5px solid ${isActive ? s.color : T.n300}`,
+                      background: isActive ? s.bg : T.n0, color: isActive ? s.color : T.n400,
+                      fontSize: 12, fontWeight: 500, cursor: "pointer",
+                      fontFamily: T.font, transition: "all 200ms",
+                    }}>
+                      <Icon size={12} /> {s.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div style={{
+          padding: "16px 24px", borderTop: `1px solid ${T.n200}`,
+          display: "flex", justifyContent: "space-between", gap: 10,
+        }}>
+          <button onClick={() => onClose()} style={{
+            padding: "11px 20px", borderRadius: T.radiusMd, border: `1.5px solid ${T.n300}`,
+            background: T.n0, color: T.n700, fontFamily: T.font, fontSize: 14, fontWeight: 500,
+            cursor: "pointer", transition: "all 150ms",
+          }}
+            onMouseEnter={e => e.currentTarget.style.background = T.n100}
+            onMouseLeave={e => e.currentTarget.style.background = T.n0}>
+            Cancelar
+          </button>
+          <button onClick={handleSave} disabled={saving} style={{
+            padding: "11px 24px", borderRadius: T.radiusMd, border: "none",
+            background: T.primary500, color: T.n0, fontFamily: T.font, fontSize: 14, fontWeight: 600,
+            cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+            transition: "all 200ms", opacity: saving ? 0.7 : 1,
+          }}
+            onMouseEnter={e => { if (!saving) e.currentTarget.style.background = T.primary600; }}
+            onMouseLeave={e => e.currentTarget.style.background = T.primary500}>
+            {saving ? <><Loader2 size={16} className="spin" /> Salvando...</>
+              : isNew ? <><Check size={16} /> Agendar</> : <><Check size={16} /> Salvar</>}
+          </button>
         </div>
       </div>
+    </div>
+  );
+}
 
-      <Card padding="0" style={{ overflow: 'hidden' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '60px repeat(7, 1fr)', borderBottom: `1px solid ${T.n200}` }}>
-          <div style={{ padding: 12 }} />
-          {weekDates.map((d, i) => (
-            <div key={i} style={{ padding: '12px 8px', textAlign: 'center', borderLeft: `1px solid ${T.n200}`, background: isToday(d) ? T.primary50 : 'transparent' }}>
-              <div style={{ fontSize: 11, color: T.n400, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{DAYS_LABEL[d.getDay()]}</div>
-              <div style={{ fontSize: 20, fontWeight: 700, marginTop: 2, color: isToday(d) ? T.primary500 : T.n900 }}>{d.getDate()}</div>
-            </div>
-          ))}
-        </div>
-        <div style={{ maxHeight: 'calc(100vh - 260px)', overflowY: 'auto' }}>
-          {HOURS.map(hour => (
-            <div key={hour} style={{ display: 'grid', gridTemplateColumns: '60px repeat(7, 1fr)', minHeight: 70, borderBottom: `1px solid ${T.n100}` }}>
-              <div style={{ padding: '6px 8px', fontSize: 11, color: T.n400, fontWeight: 500, textAlign: 'right', borderRight: `1px solid ${T.n200}` }}>{`${String(hour).padStart(2, '0')}:00`}</div>
-              {weekDates.map((d, di) => {
-                const cellApts = getAptsForCell(d, hour)
-                return (
-                  <div key={di} onClick={() => cellApts.length === 0 && openCreate(d, hour)}
-                    style={{ borderLeft: `1px solid ${T.n100}`, padding: 3, cursor: cellApts.length === 0 ? 'pointer' : 'default', background: isToday(d) ? `${T.primary500}03` : 'transparent', transition: 'background 100ms' }}
-                    onMouseEnter={e => { if (!cellApts.length) e.currentTarget.style.background = T.n100 }}
-                    onMouseLeave={e => { e.currentTarget.style.background = isToday(d) ? `${T.primary500}03` : 'transparent' }}>
-                    {cellApts.map(apt => {
-                      const sc = STATUS_COLORS[apt.status] || STATUS_COLORS.scheduled
-                      return (
-                        <button key={apt.id} onClick={e => { e.stopPropagation(); setDetailApt(apt) }}
-                          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '5px 8px', borderRadius: 6, marginBottom: 2, background: sc.bg, borderLeft: `3px solid ${sc.border}`, border: 'none', cursor: 'pointer', fontFamily: T.font }}>
-                          <div style={{ fontSize: 11, fontWeight: 600, color: sc.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{apt.patient?.full_name}</div>
-                          <div style={{ fontSize: 10, color: sc.text, opacity: 0.7 }}>{new Date(apt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
-                        </button>
-                      )
-                    })}
-                  </div>
-                )
-              })}
-            </div>
-          ))}
-        </div>
-      </Card>
+/* ═══════════════ DAY VIEW ═══════════════ */
+function DayView({ date, appointments, profFilter, onSlotClick, onAptClick }) {
+  const SLOT_H = 60;
+  const filtered = appointments.filter(a => {
+    const d = a.date === date.toISOString().split("T")[0];
+    const p = profFilter === "all" || a.professional.id === Number(profFilter);
+    return d && p;
+  });
 
-      {/* Detail Modal */}
-      <Modal open={Boolean(detailApt)} onClose={() => setDetailApt(null)} title="Detalhes da consulta" width={480}>
-        {detailApt && (() => {
-          const sc = STATUS_COLORS[detailApt.status] || STATUS_COLORS.scheduled
-          const st = new Date(detailApt.start_time), et = new Date(detailApt.end_time)
-          return (<div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-              <Avatar name={detailApt.patient?.full_name} size={48} color={detailApt.professional?.color} />
-              <div style={{ flex: 1 }}>
-                <h3 style={{ fontSize: 17, fontWeight: 700 }}>{detailApt.patient?.full_name}</h3>
-                <div style={{ fontSize: 13, color: T.n400 }}>com {detailApt.professional?.full_name}</div>
+  const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const showNowLine = isToday(date) && currentMinutes >= 7 * 60 && currentMinutes <= 19 * 60;
+  const nowTop = ((currentMinutes - 7 * 60) / 60) * SLOT_H;
+
+  const groupedByHour = {};
+  filtered.forEach(a => {
+    if (!groupedByHour[a.hour]) groupedByHour[a.hour] = [];
+    groupedByHour[a.hour].push(a);
+  });
+
+  return (
+    <div style={{ position: "relative", minHeight: HOURS.length * SLOT_H }}>
+      {/* Now line */}
+      {showNowLine && (
+        <div style={{
+          position: "absolute", top: nowTop, left: 58, right: 0, zIndex: 5,
+          display: "flex", alignItems: "center",
+        }}>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: T.error, flexShrink: 0 }} />
+          <div style={{ flex: 1, height: 2, background: T.error }} />
+        </div>
+      )}
+
+      {HOURS.map(({ hour, label }) => (
+        <div key={hour} style={{
+          display: "flex", height: SLOT_H, borderBottom: `1px solid ${T.n200}`,
+        }}>
+          {/* Time label */}
+          <div style={{
+            width: 60, flexShrink: 0, padding: "0 8px", textAlign: "right",
+            fontSize: 12, color: T.n400, fontWeight: 500, paddingTop: 4,
+          }}>
+            {label}
+          </div>
+
+          {/* Slot area */}
+          <div style={{
+            flex: 1, position: "relative", cursor: "pointer",
+            transition: "background 100ms",
+          }}
+            onClick={() => onSlotClick({ date: date.toISOString().split("T")[0], time: label })}
+            onMouseEnter={e => e.currentTarget.style.background = T.n100}
+            onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+            {/* Half hour line */}
+            <div style={{
+              position: "absolute", top: "50%", left: 0, right: 0,
+              height: 1, background: T.n200, opacity: 0.5,
+            }} />
+
+            {/* Appointments in this hour */}
+            {(groupedByHour[hour] || []).map(apt => (
+              <AppointmentBlock key={apt.id} apt={apt} onClick={onAptClick} slotHeight={SLOT_H / 4} />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ═══════════════ WEEK VIEW ═══════════════ */
+function WeekView({ weekStart, appointments, profFilter, onSlotClick, onAptClick }) {
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekStart);
+    d.setDate(d.getDate() + i);
+    days.push(d);
+  }
+
+  const SLOT_H = 52;
+
+  return (
+    <div style={{ display: "flex", overflow: "hidden" }}>
+      {/* Time column */}
+      <div style={{ width: 56, flexShrink: 0 }}>
+        <div style={{ height: 48 }} />
+        {HOURS.map(({ hour, label }) => (
+          <div key={hour} style={{
+            height: SLOT_H, display: "flex", alignItems: "flex-start",
+            justifyContent: "flex-end", padding: "2px 6px 0 0",
+            fontSize: 11, color: T.n400, fontWeight: 500,
+          }}>{label}</div>
+        ))}
+      </div>
+
+      {/* Day columns */}
+      <div style={{ flex: 1, display: "grid", gridTemplateColumns: "repeat(7, 1fr)", minWidth: 0 }}>
+        {days.map((day, di) => {
+          const dateStr = day.toISOString().split("T")[0];
+          const dayAppts = appointments.filter(a => {
+            const d = a.date === dateStr;
+            const p = profFilter === "all" || a.professional.id === Number(profFilter);
+            return d && p;
+          });
+
+          const groupedByHour = {};
+          dayAppts.forEach(a => {
+            if (!groupedByHour[a.hour]) groupedByHour[a.hour] = [];
+            groupedByHour[a.hour].push(a);
+          });
+
+          const today = isToday(day);
+          const isSun = day.getDay() === 0;
+
+          return (
+            <div key={di} style={{
+              borderLeft: di > 0 ? `1px solid ${T.n200}` : "none",
+              opacity: isSun ? 0.4 : 1,
+            }}>
+              {/* Day header */}
+              <div style={{
+                height: 48, display: "flex", flexDirection: "column",
+                alignItems: "center", justifyContent: "center",
+                borderBottom: `1px solid ${T.n200}`,
+                background: today ? T.primary50 : "transparent",
+              }}>
+                <span style={{ fontSize: 11, color: T.n400, textTransform: "capitalize", fontWeight: 500 }}>
+                  {dayName(day)}
+                </span>
+                <span style={{
+                  fontSize: 16, fontWeight: 700, lineHeight: 1.2,
+                  color: today ? T.primary500 : T.n900,
+                  width: 28, height: 28, borderRadius: "50%",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  background: today ? T.primary500 : "transparent",
+                  ...(today ? { color: T.n0 } : {}),
+                }}>
+                  {day.getDate()}
+                </span>
               </div>
-              <Badge color={sc.text} bg={sc.bg} size="md">{sc.label}</Badge>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
-              {[{ icon: Calendar, l: 'Data', v: st.toLocaleDateString('pt-BR') }, { icon: Clock, l: 'Horário', v: `${st.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} – ${et.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` }, { icon: detailApt.modality === 'online' ? Video : MapPin, l: 'Local', v: detailApt.modality === 'online' ? 'Online' : `Presencial${detailApt.room ? ' — ' + detailApt.room : ''}` }, { icon: Phone, l: 'Telefone', v: detailApt.patient?.phone || '—' }].map(item => (
-                <div key={item.l} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: T.n100, borderRadius: T.radiusMd }}>
-                  <item.icon size={15} color={T.n400} /><div><div style={{ fontSize: 10, color: T.n400, textTransform: 'uppercase' }}>{item.l}</div><div style={{ fontSize: 13, fontWeight: 500 }}>{item.v}</div></div>
+
+              {/* Hour slots */}
+              {HOURS.map(({ hour, label }) => (
+                <div key={hour} style={{
+                  height: SLOT_H, borderBottom: `1px solid ${T.n200}`,
+                  position: "relative", cursor: isSun ? "default" : "pointer",
+                  transition: "background 100ms",
+                }}
+                  onClick={() => !isSun && onSlotClick({ date: dateStr, time: label })}
+                  onMouseEnter={e => { if (!isSun) e.currentTarget.style.background = T.n100; }}
+                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                  {(groupedByHour[hour] || []).map(apt => (
+                    <div key={apt.id}
+                      onClick={(e) => { e.stopPropagation(); onAptClick(apt); }}
+                      style={{
+                        position: "absolute",
+                        top: (apt.minutes / 60) * SLOT_H + 2,
+                        left: 2, right: 2,
+                        height: Math.max((apt.duration / 60) * SLOT_H - 4, 20),
+                        background: `${apt.professional.color}16`,
+                        borderLeft: `3px solid ${apt.professional.color}`,
+                        borderRadius: 4, padding: "3px 6px", overflow: "hidden",
+                        cursor: "pointer", zIndex: 2,
+                        fontSize: 11, lineHeight: 1.3,
+                        transition: "opacity 150ms",
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.opacity = "0.85"}
+                      onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
+                      <div style={{ fontWeight: 600, color: T.n900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {apt.patient}
+                      </div>
+                      {(apt.duration / 60) * SLOT_H > 30 && (
+                        <div style={{ color: T.n400, fontSize: 10, whiteSpace: "nowrap", overflow: "hidden" }}>
+                          {apt.time} · {apt.service.name}
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 20 }}>
-              {!['confirmed', 'completed', 'cancelled', 'no_show'].includes(detailApt.status) && <Button size="sm" variant="success" icon={CheckCircle2} onClick={() => updateStatus(detailApt.id, 'confirmed')}>Confirmar</Button>}
-              {detailApt.status === 'confirmed' && <Button size="sm" variant="success" icon={CheckCircle2} onClick={() => updateStatus(detailApt.id, 'completed')}>Concluir</Button>}
-              {!['completed', 'cancelled', 'no_show'].includes(detailApt.status) && <><Button size="sm" variant="danger" icon={XCircle} onClick={() => updateStatus(detailApt.id, 'cancelled')}>Cancelar</Button><Button size="sm" variant="ghost" icon={AlertCircle} onClick={() => updateStatus(detailApt.id, 'no_show')}>Faltou</Button></>}
-            </div>
-            <div style={{ display: 'flex', gap: 8, borderTop: `1px solid ${T.n200}`, paddingTop: 16 }}>
-              <Button variant="secondary" icon={Edit3} onClick={() => openEdit(detailApt)}>Editar</Button>
-              <Button variant="danger" icon={Trash2} onClick={() => { setDeleteId(detailApt.id); setDetailApt(null) }}>Excluir</Button>
-            </div>
-          </div>)
-        })()}
-      </Modal>
-
-      {/* Create/Edit Modal */}
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editId ? 'Editar consulta' : 'Nova consulta'} width={540}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
-          <div style={{ gridColumn: '1 / -1' }}>
-            <SelectField label="Paciente" value={form.patient_id} onChange={v => setForm({ ...form, patient_id: v })} placeholder="Selecione" required options={patients.filter(p => p.status === 'active').map(p => ({ value: p.id, label: p.full_name }))} />
-          </div>
-          <SelectField label="Profissional" value={form.professional_id} onChange={v => { const pr = professionals.find(p => p.id === v); setForm({ ...form, professional_id: v, price: pr?.session_price?.toString() || form.price }) }} placeholder="Selecione" required options={professionals.filter(p => p.is_active).map(p => ({ value: p.id, label: p.full_name }))} />
-          <InputField label="Data" type="date" value={form.date} onChange={v => setForm({ ...form, date: v })} required />
-          <InputField label="Início" type="time" value={form.start_time} onChange={v => setForm({ ...form, start_time: v })} required />
-          <InputField label="Término" type="time" value={form.end_time} onChange={v => setForm({ ...form, end_time: v })} required />
-          <SelectField label="Tipo" value={form.type} onChange={v => setForm({ ...form, type: v })} options={[{ value: 'regular', label: 'Regular' }, { value: 'initial', label: 'Primeira consulta' }, { value: 'follow_up', label: 'Retorno' }, { value: 'emergency', label: 'Emergência' }, { value: 'online', label: 'Online' }, { value: 'group', label: 'Grupo' }]} />
-          <SelectField label="Modalidade" value={form.modality} onChange={v => setForm({ ...form, modality: v })} options={[{ value: 'in_person', label: 'Presencial' }, { value: 'online', label: 'Online' }]} />
-          <InputField label="Sala" value={form.room} onChange={v => setForm({ ...form, room: v })} placeholder="Ex: Sala 1" />
-          <InputField label="Valor (R$)" type="number" value={form.price} onChange={v => setForm({ ...form, price: v })} placeholder="0.00" />
-          <div style={{ gridColumn: '1 / -1' }}><TextArea label="Observações" value={form.notes} onChange={v => setForm({ ...form, notes: v })} rows={2} placeholder="Notas..." /></div>
-        </div>
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
-          <Button variant="secondary" onClick={() => setModalOpen(false)}>Cancelar</Button>
-          <Button onClick={handleSave} loading={saving}>{editId ? 'Salvar' : 'Agendar'}</Button>
-        </div>
-      </Modal>
-
-      <ConfirmDialog open={Boolean(deleteId)} onClose={() => setDeleteId(null)} onConfirm={async () => { await remove(deleteId); setDeleteId(null) }} title="Excluir consulta" message="Tem certeza?" confirmText="Excluir" />
+          );
+        })}
+      </div>
     </div>
-  )
+  );
 }
 
-const navBtn = { width: 32, height: 32, borderRadius: T.radiusMd, border: `1px solid ${T.n300}`, background: T.n0, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }
+/* ═══════════════ AGENDA CONTENT ═══════════════ */
+export default function AgendaContent() {
+  const [view, setView] = useState("day");
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [weekStart, setWeekStart] = useState(getMonday(new Date()));
+  const [profFilter, setProfFilter] = useState("all");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedApt, setSelectedApt] = useState(null);
+  const [selectedSlot, setSelectedSlot] = useState(null);
+
+  const appointments = useMemo(() => generateAppointments(weekStart), [weekStart.toISOString()]);
+
+  const goToday = () => {
+    const today = new Date();
+    setCurrentDate(today);
+    setWeekStart(getMonday(today));
+  };
+
+  const navigate = (dir) => {
+    if (view === "day") {
+      const d = new Date(currentDate);
+      d.setDate(d.getDate() + dir);
+      setCurrentDate(d);
+      setWeekStart(getMonday(d));
+    } else {
+      const d = new Date(weekStart);
+      d.setDate(d.getDate() + 7 * dir);
+      setWeekStart(d);
+      setCurrentDate(d);
+    }
+  };
+
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekEnd.getDate() + 6);
+
+  const todayAppts = appointments.filter(a => a.date === currentDate.toISOString().split("T")[0]);
+  const todayStats = {
+    total: todayAppts.length,
+    confirmed: todayAppts.filter(a => a.status === "confirmado").length,
+    pending: todayAppts.filter(a => a.status === "pendente" || a.status === "sem_resposta").length,
+  };
+
+  const openNewModal = (slot) => { setSelectedApt(null); setSelectedSlot(slot); setModalOpen(true); };
+  const openAptModal = (apt) => { setSelectedApt(apt); setSelectedSlot(null); setModalOpen(true); };
+
+  return (
+    <div style={{ padding: "24px 28px" }}>
+      {/* Toolbar */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        marginBottom: 20, flexWrap: "wrap", gap: 12,
+      }}>
+        {/* Left */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: T.n900, letterSpacing: "-0.01em" }}>Agenda</h1>
+
+          {/* View toggle */}
+          <div style={{
+            display: "flex", background: T.n100, borderRadius: T.radiusMd, padding: 3,
+            border: `1px solid ${T.n200}`,
+          }}>
+            {[{ id: "day", label: "Dia" }, { id: "week", label: "Semana" }].map(v => (
+              <button key={v.id} onClick={() => setView(v.id)} style={{
+                padding: "7px 16px", borderRadius: 6, border: "none", cursor: "pointer",
+                fontFamily: T.font, fontSize: 13, fontWeight: view === v.id ? 600 : 400,
+                background: view === v.id ? T.n0 : "transparent",
+                color: view === v.id ? T.n900 : T.n400,
+                boxShadow: view === v.id ? T.shadowSoft : "none",
+                transition: "all 200ms",
+              }}>{v.label}</button>
+            ))}
+          </div>
+
+          {/* Date nav */}
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <button onClick={() => navigate(-1)} style={{
+              width: 32, height: 32, borderRadius: 6, border: `1px solid ${T.n300}`,
+              background: T.n0, cursor: "pointer", display: "flex",
+              alignItems: "center", justifyContent: "center", color: T.n700,
+              transition: "all 150ms",
+            }}
+              onMouseEnter={e => e.currentTarget.style.background = T.n100}
+              onMouseLeave={e => e.currentTarget.style.background = T.n0}>
+              <ChevronLeft size={16} />
+            </button>
+
+            <button onClick={goToday} style={{
+              padding: "7px 14px", borderRadius: 6, border: `1px solid ${T.n300}`,
+              background: T.n0, cursor: "pointer", fontFamily: T.font,
+              fontSize: 13, fontWeight: 500, color: T.n700, transition: "all 150ms",
+            }}
+              onMouseEnter={e => e.currentTarget.style.background = T.n100}
+              onMouseLeave={e => e.currentTarget.style.background = T.n0}>
+              Hoje
+            </button>
+
+            <button onClick={() => navigate(1)} style={{
+              width: 32, height: 32, borderRadius: 6, border: `1px solid ${T.n300}`,
+              background: T.n0, cursor: "pointer", display: "flex",
+              alignItems: "center", justifyContent: "center", color: T.n700,
+              transition: "all 150ms",
+            }}
+              onMouseEnter={e => e.currentTarget.style.background = T.n100}
+              onMouseLeave={e => e.currentTarget.style.background = T.n0}>
+              <ChevronRight size={16} />
+            </button>
+          </div>
+
+          {/* Date label */}
+          <span style={{ fontSize: 15, fontWeight: 600, color: T.n900 }}>
+            {view === "day"
+              ? formatDateFull(currentDate)
+              : `${formatDateBR(weekStart)} — ${formatDateBR(weekEnd)}`}
+          </span>
+        </div>
+
+        {/* Right */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {/* Professional filter */}
+          <div style={{ position: "relative" }}>
+            <select value={profFilter} onChange={e => setProfFilter(e.target.value)}
+              style={{
+                padding: "8px 32px 8px 12px", borderRadius: T.radiusMd,
+                border: `1.5px solid ${T.n300}`, background: T.n0,
+                fontFamily: T.font, fontSize: 13, color: T.n700,
+                cursor: "pointer", appearance: "auto", outline: "none",
+              }}>
+              <option value="all">Todos os profissionais</option>
+              {PROFESSIONALS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+
+          {/* New appointment button */}
+          <button onClick={() => openNewModal(null)} style={{
+            padding: "9px 18px", borderRadius: T.radiusMd, border: "none",
+            background: T.primary500, color: T.n0, fontFamily: T.font,
+            fontSize: 14, fontWeight: 600, cursor: "pointer",
+            display: "flex", alignItems: "center", gap: 6, transition: "all 200ms",
+          }}
+            onMouseEnter={e => { e.currentTarget.style.background = T.primary600; e.currentTarget.style.transform = "translateY(-1px)"; }}
+            onMouseLeave={e => { e.currentTarget.style.background = T.primary500; e.currentTarget.style.transform = "none"; }}>
+            <Plus size={16} /> Novo agendamento
+          </button>
+        </div>
+      </div>
+
+      {/* Stats bar (day view) */}
+      {view === "day" && (
+        <div style={{
+          display: "flex", gap: 16, marginBottom: 16,
+          animation: "fadeSlideUp 0.3s ease both",
+        }}>
+          {[
+            { label: "Total", value: todayStats.total, color: T.n700, bg: T.n100 },
+            { label: "Confirmados", value: todayStats.confirmed, color: T.success, bg: "rgba(22,163,74,0.08)" },
+            { label: "Pendentes", value: todayStats.pending, color: T.warning, bg: "rgba(245,158,11,0.08)" },
+          ].map((s, i) => (
+            <div key={i} style={{
+              display: "flex", alignItems: "center", gap: 8, padding: "8px 16px",
+              borderRadius: T.radiusMd, background: s.bg, fontSize: 13, fontWeight: 500,
+            }}>
+              <span style={{ color: s.color, fontWeight: 700, fontSize: 18 }}>{s.value}</span>
+              <span style={{ color: T.n400 }}>{s.label}</span>
+            </div>
+          ))}
+
+          {/* Legend */}
+          <div style={{ marginLeft: "auto", display: "flex", gap: 12, alignItems: "center" }}>
+            {PROFESSIONALS.filter(p => profFilter === "all" || p.id === Number(profFilter)).map(p => (
+              <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: T.n400 }}>
+                <div style={{ width: 10, height: 10, borderRadius: 3, background: p.color }} />
+                {p.short}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Calendar body */}
+      <div style={{
+        background: T.n0, borderRadius: T.radiusLg, border: `1px solid ${T.n200}`,
+        boxShadow: T.shadowSoft, overflow: "auto",
+        maxHeight: "calc(100vh - 220px)",
+        animation: "fadeSlideUp 0.35s ease 0.05s both",
+      }}>
+        {view === "day" ? (
+          <DayView
+            date={currentDate}
+            appointments={appointments}
+            profFilter={profFilter}
+            onSlotClick={openNewModal}
+            onAptClick={openAptModal}
+          />
+        ) : (
+          <WeekView
+            weekStart={weekStart}
+            appointments={appointments}
+            profFilter={profFilter}
+            onSlotClick={openNewModal}
+            onAptClick={openAptModal}
+          />
+        )}
+      </div>
+
+      {/* Modal */}
+      <AppointmentModal
+        open={modalOpen}
+        onClose={(action) => { setModalOpen(false); setSelectedApt(null); setSelectedSlot(null); }}
+        appointment={selectedApt}
+        selectedSlot={selectedSlot}
+        appointments={appointments}
+      />
+    </div>
+  );
+}
+
+/* ═══════════════ MAIN EXPORT ═══════════════ */
+
+

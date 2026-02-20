@@ -1,211 +1,637 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
-import { MessageSquare, Send, Search, Phone, Paperclip, Smile, Check, CheckCheck, Clock, FileText, Users, Zap, ArrowRight } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  AlertCircle, Check, CheckCircle2, Clock, DollarSign, Edit3, Eye, Globe, List,
+  Loader2, MessageSquare, Paperclip, Phone, Plus, RefreshCw, Search, Send,
+  Settings, Smile, X
+} from 'lucide-react'
 import { T } from '@/utils/theme'
 import { useAppStore } from '@/lib/store'
-import { useConversations, useMessages, useMessageTemplates, usePatients } from '@/lib/hooks'
-import { Card, Badge, Button, Modal, EmptyState, LoadingSpinner, Avatar, getInitials } from '@/components/ui'
 
-const STATUS_ICONS = { queued: Clock, sent: Check, delivered: CheckCheck, read: CheckCheck, failed: null }
+/* ─── Design Tokens ─── */
+function getInitials(n){return n.split(" ").map(w=>w[0]).filter(Boolean).slice(0,2).join("").toUpperCase();}
+function timeAgo(d){const now=Date.now(),diff=now-new Date(d).getTime(),m=Math.floor(diff/60000);if(m<1)return"agora";if(m<60)return`${m}min`;const h=Math.floor(m/60);if(h<24)return`${h}h`;const dy=Math.floor(h/24);return dy===1?"ontem":`${dy}d`;}
+function fmtTime(d){return new Date(d).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});}
+function fmtDate(d){return new Date(d).toLocaleDateString("pt-BR",{day:"2-digit",month:"short"});}
 
-export default function MensagensContent() {
-  const { clinicPlan } = useAppStore()
-  const { data: conversations, loading } = useConversations()
-  const { data: templates } = useMessageTemplates()
-  const { data: patients } = usePatients()
+/* ─── Templates ─── */
+const TEMPLATES = [
+  {id:1,name:"Lembrete de consulta",category:"reminder",icon:Clock,color:T.primary500,body:"Olá {{nome}}! 😊\n\nLembramos que sua consulta de *{{servico}}* está agendada para *{{data}}* às *{{hora}}* com {{profissional}}.\n\nLocal: Clínica Terapee — Rua Augusta, 500.\n\nPor favor, confirme sua presença respondendo esta mensagem.\n\nAté lá! 💙",variables:["nome","servico","data","hora","profissional"],active:true},
+  {id:2,name:"Confirmação de agendamento",category:"confirmation",icon:CheckCircle2,color:T.success,body:"Olá {{nome}}! ✅\n\nSeu agendamento foi confirmado com sucesso!\n\n📅 *{{data}}* às *{{hora}}*\n👩‍⚕️ {{profissional}}\n📋 {{servico}}\n\nCaso precise reagendar, entre em contato com pelo menos 24h de antecedência.\n\nClínica Terapee 💙",variables:["nome","servico","data","hora","profissional"],active:true},
+  {id:3,name:"Cancelamento",category:"cancellation",icon:X,color:T.error,body:"Olá {{nome}},\n\nInformamos que sua consulta de *{{servico}}* agendada para *{{data}}* às *{{hora}}* foi cancelada.\n\nMotivo: {{motivo}}\n\nPara reagendar, entre em contato conosco.\n\nClínica Terapee",variables:["nome","servico","data","hora","motivo"],active:true},
+  {id:4,name:"Aniversário",category:"birthday",icon:Heart,color:T.pink,body:"Olá {{nome}}! 🎂🎉\n\nA equipe da Clínica Terapee deseja um *Feliz Aniversário*!\n\nQue seu dia seja repleto de alegria, saúde e realizações.\n\nUm abraço carinhoso de toda a equipe! 💙✨",variables:["nome"],active:true},
+  {id:5,name:"Retorno / Follow-up",category:"followup",icon:RefreshCw,color:T.teal,body:"Olá {{nome}}! 👋\n\nFaz um tempo desde sua última consulta conosco. Gostaríamos de saber como você está!\n\nLembramos que a continuidade do tratamento é importante para melhores resultados.\n\nDeseja agendar um retorno? Estamos à disposição!\n\nClínica Terapee 💙",variables:["nome"],active:true},
+  {id:6,name:"Cobrança pendente",category:"billing",icon:DollarSign,color:T.warning,body:"Olá {{nome}},\n\nIdentificamos uma pendência financeira referente à consulta de *{{servico}}* realizada em *{{data}}*, no valor de *R$ {{valor}}*.\n\nPara sua comodidade, segue o link para pagamento via Pix:\n{{link_pagamento}}\n\nEm caso de dúvidas, estamos à disposição.\n\nClínica Terapee",variables:["nome","servico","data","valor","link_pagamento"],active:true},
+];
 
-  const [selectedConvId, setSelectedConvId] = useState(null)
-  const [searchQ, setSearchQ] = useState('')
-  const [newMsg, setNewMsg] = useState('')
-  const [templateModal, setTemplateModal] = useState(false)
-  const [sending, setSending] = useState(false)
+const TEMPLATE_CATS = [
+  {id:"all",label:"Todos"},
+  {id:"reminder",label:"Lembretes",color:T.primary500},
+  {id:"confirmation",label:"Confirmações",color:T.success},
+  {id:"cancellation",label:"Cancelamentos",color:T.error},
+  {id:"birthday",label:"Aniversários",color:T.pink},
+  {id:"followup",label:"Follow-up",color:T.teal},
+  {id:"billing",label:"Cobranças",color:T.warning},
+];
 
-  const channel = clinicPlan === 'max' ? 'meta' : 'uazapi'
+/* ─── Mock Conversations ─── */
+const MOCK_CONVERSATIONS = [
+  {id:1,patient:"Maria Silva",phone:"(11) 98765-4321",color:T.primary500,unread:2,lastMsg:"Confirmado! Estarei lá no horário.",lastTime:"2025-01-20T16:45:00",status:"delivered",
+    messages:[
+      {id:1,from:"clinic",text:"Olá Maria! 😊\n\nLembramos que sua consulta de Psicoterapia Individual está agendada para amanhã, 21/01, às 10:00 com Dra. Ana Costa.\n\nPor favor, confirme sua presença respondendo esta mensagem.\n\nAté lá! 💙",time:"2025-01-20T14:00:00",status:"read",template:"Lembrete de consulta"},
+      {id:2,from:"patient",text:"Oi! Sim, confirmo. Estarei lá no horário.",time:"2025-01-20T16:30:00"},
+      {id:3,from:"patient",text:"Confirmado! Estarei lá no horário.",time:"2025-01-20T16:45:00"},
+    ]},
+  {id:2,patient:"João Santos",phone:"(11) 91234-5678",color:T.success,unread:0,lastMsg:"Agendamento confirmado ✅",lastTime:"2025-01-20T15:20:00",status:"read",
+    messages:[
+      {id:1,from:"clinic",text:"Olá João! ✅\n\nSeu agendamento foi confirmado!\n\n📅 22/01 às 14:00\n👩‍⚕️ Dr. Carlos Lima\n📋 Fisioterapia Geral\n\nClínica Terapee 💙",time:"2025-01-20T15:00:00",status:"read",template:"Confirmação de agendamento"},
+      {id:2,from:"patient",text:"Obrigado! Agendamento confirmado ✅",time:"2025-01-20T15:20:00"},
+    ]},
+  {id:3,patient:"Ana Oliveira",phone:"(11) 99876-5432",color:T.warning,unread:1,lastMsg:"Preciso reagendar minha consulta de quinta",lastTime:"2025-01-20T12:10:00",status:"delivered",
+    messages:[
+      {id:1,from:"clinic",text:"Olá Ana! 😊\n\nLembramos que sua consulta está agendada para quinta, 23/01, às 09:00.\n\nPor favor, confirme sua presença.\n\nAté lá! 💙",time:"2025-01-20T10:00:00",status:"read",template:"Lembrete de consulta"},
+      {id:2,from:"patient",text:"Oi, bom dia! Preciso reagendar minha consulta de quinta",time:"2025-01-20T12:10:00"},
+    ]},
+  {id:4,patient:"Pedro Costa",phone:"(11) 92345-6789",color:T.purple,unread:0,lastMsg:"Lembrete enviado automaticamente",lastTime:"2025-01-20T08:00:00",status:"sent",
+    messages:[
+      {id:1,from:"clinic",text:"Olá Pedro! 😊\n\nLembramos que sua consulta de Terapia Ocupacional está agendada para hoje, 20/01, às 14:00 com Dr. Ricardo Alves.\n\nPor favor, confirme sua presença.\n\nAté lá! 💙",time:"2025-01-20T08:00:00",status:"sent",template:"Lembrete de consulta"},
+    ]},
+  {id:5,patient:"Carla Mendes",phone:"(11) 93456-7890",color:T.teal,unread:0,lastMsg:"Feliz aniversário! 🎂",lastTime:"2025-01-19T09:00:00",status:"read",
+    messages:[
+      {id:1,from:"clinic",text:"Olá Carla! 🎂🎉\n\nA equipe da Clínica Terapee deseja um Feliz Aniversário!\n\nQue seu dia seja repleto de alegria, saúde e realizações.\n\nUm abraço carinhoso! 💙✨",time:"2025-01-19T09:00:00",status:"read",template:"Aniversário"},
+      {id:2,from:"patient",text:"Que lindo! Muito obrigada, equipe! ❤️😊",time:"2025-01-19T10:15:00"},
+    ]},
+  {id:6,patient:"Roberto Alves",phone:"(11) 94567-8901",color:T.orange,unread:0,lastMsg:"Cobrança enviada",lastTime:"2025-01-18T11:00:00",status:"delivered",
+    messages:[
+      {id:1,from:"clinic",text:"Olá Roberto,\n\nIdentificamos uma pendência referente à consulta de Fisioterapia realizada em 10/01, no valor de R$ 150,00.\n\nPara pagamento via Pix, utilize a chave: 12.345.678/0001-01\n\nEm caso de dúvidas, estamos à disposição.\n\nClínica Terapee",time:"2025-01-18T11:00:00",status:"delivered",template:"Cobrança pendente"},
+    ]},
+  {id:7,patient:"Fernanda Lima",phone:"(11) 95678-9012",color:T.pink,unread:0,lastMsg:"Vou agendar sim! Pode ser semana que vem?",lastTime:"2025-01-17T14:30:00",status:"read",
+    messages:[
+      {id:1,from:"clinic",text:"Olá Fernanda! 👋\n\nFaz um tempo desde sua última consulta. Gostaríamos de saber como você está!\n\nDeseja agendar um retorno?\n\nClínica Terapee 💙",time:"2025-01-17T10:00:00",status:"read",template:"Retorno / Follow-up"},
+      {id:2,from:"patient",text:"Oi! Que bom que entraram em contato. Vou agendar sim! Pode ser semana que vem?",time:"2025-01-17T14:30:00"},
+    ]},
+  {id:8,patient:"Lucas Ferreira",phone:"(11) 96789-0123",color:T.info,unread:0,lastMsg:"Mensagem não entregue",lastTime:"2025-01-16T09:00:00",status:"failed",
+    messages:[
+      {id:1,from:"clinic",text:"Olá Lucas! Lembramos da sua consulta amanhã às 11:00.\n\nClínica Terapee 💙",time:"2025-01-16T09:00:00",status:"failed",template:"Lembrete de consulta"},
+    ]},
+];
 
-  const filteredConvs = useMemo(() => {
-    if (!searchQ) return conversations
-    const q = searchQ.toLowerCase()
-    return conversations.filter(c => c.patient?.full_name?.toLowerCase().includes(q) || c.phone?.includes(q))
-  }, [conversations, searchQ])
+const STATUS_CFG = {
+  sent:      {label:"Enviado",     icon:Check,        color:T.n400},
+  delivered: {label:"Entregue",    icon:CheckCircle2, color:T.info},
+  read:      {label:"Lido",        icon:CheckCircle2, color:T.primary500},
+  failed:    {label:"Falhou",      icon:AlertCircle,  color:T.error},
+};
 
-  const selectedConv = conversations.find(c => c.id === selectedConvId)
+/* ═══ Sidebar ═══ */
 
-  // Auto-select first conversation
-  useEffect(() => { if (conversations.length > 0 && !selectedConvId) setSelectedConvId(conversations[0].id) }, [conversations, selectedConvId])
+/* ═══ Shared ═══ */
+function Badge({children,color,bg}){return <span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"4px 10px",borderRadius:20,background:bg,color,fontSize:12,fontWeight:500,whiteSpace:"nowrap"}}>{children}</span>;}
+const IS={width:"100%",padding:"10px 12px",border:`1.5px solid ${T.n300}`,borderRadius:T.radiusMd,fontSize:14,fontFamily:T.font,color:T.n900,outline:"none",boxSizing:"border-box",background:T.n0};
+const LS={display:"block",fontSize:13,fontWeight:500,color:T.n700,marginBottom:5};
 
-  if (loading) return <LoadingSpinner />
+/* ═══ Status Ticks ═══ */
+function MsgStatus({status}){
+  const cfg=STATUS_CFG[status];
+  if(!cfg) return null;
+  const Icon=cfg.icon;
+  return <Icon size={14} color={cfg.color} style={{flexShrink:0}}/>;
+}
 
-  return (
-    <div style={{ display: 'flex', height: 'calc(100vh - 64px)', animation: 'fadeSlideUp 0.25s ease both' }}>
-      {/* Conversation List */}
-      <div style={{ width: 340, borderRight: `1px solid ${T.n200}`, display: 'flex', flexDirection: 'column', background: T.n0 }}>
-        {/* Channel banner */}
-        <div style={{ padding: '12px 16px', background: channel === 'meta' ? `${T.primary500}08` : T.waBg, borderBottom: `1px solid ${T.n200}`, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Zap size={14} color={channel === 'meta' ? T.primary500 : T.wa} />
-          <span style={{ fontSize: 12, fontWeight: 600, color: channel === 'meta' ? T.primary500 : T.waDark }}>
-            {channel === 'meta' ? 'Meta Business API' : 'UAZAPI (livre)'}
-          </span>
-          <Badge color={T.success} bg={T.successBg} size="sm">Conectado</Badge>
+/* ═══ Template Modal ═══ */
+function TemplateModal({open,onClose,template}){
+  const isEdit=!!template;
+  const[form,setForm]=useState({name:"",category:"reminder",body:"",active:true});
+  const[saving,setSaving]=useState(false);
+  useEffect(()=>{
+    if(open&&template) setForm({name:template.name,category:template.category,body:template.body,active:template.active});
+    else if(open) setForm({name:"",category:"reminder",body:"Olá {{nome}}!\n\n",active:true});
+  },[open,template]);
+  const upd=(k,v)=>setForm(f=>({...f,[k]:v}));
+  const save=()=>{setSaving(true);setTimeout(()=>{setSaving(false);onClose("saved")},1000)};
+  if(!open) return null;
+  const vars=(form.body.match(/\{\{(\w+)\}\}/g)||[]).map(v=>v.replace(/[{}]/g,""));
+  return(
+    <div onClick={()=>onClose()} style={{position:"fixed",inset:0,background:"rgba(17,17,17,0.4)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)",animation:"fadeIn 150ms ease"}}>
+      <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:560,background:T.n0,borderRadius:T.radiusLg,boxShadow:T.shadowLg,overflow:"hidden",animation:"slideUp 250ms ease",maxHeight:"92vh",display:"flex",flexDirection:"column"}}>
+        <div style={{padding:"20px 24px",borderBottom:`1px solid ${T.n200}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <h2 style={{fontSize:18,fontWeight:700}}>{isEdit?"Editar template":"Novo template"}</h2>
+          <button onClick={()=>onClose()} style={{width:32,height:32,borderRadius:8,border:"none",cursor:"pointer",background:"transparent",display:"flex",alignItems:"center",justifyContent:"center",color:T.n400}}><X size={18}/></button>
         </div>
-
-        {/* Search */}
-        <div style={{ padding: '12px 16px' }}>
-          <div style={{ position: 'relative' }}>
-            <Search size={15} color={T.n400} style={{ position: 'absolute', left: 10, top: 10 }} />
-            <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Buscar conversa..."
-              style={{ width: '100%', padding: '9px 10px 9px 34px', border: `1px solid ${T.n300}`, borderRadius: T.radiusMd, fontSize: 13, fontFamily: T.font, outline: 'none' }} />
+        <div style={{padding:"20px 24px",overflowY:"auto",flex:1}}>
+          <div style={{marginBottom:16}}><label style={LS}>Nome do template *</label><input value={form.name} onChange={e=>upd("name",e.target.value)} placeholder="Ex: Lembrete de consulta" style={IS}/></div>
+          <div style={{marginBottom:16}}>
+            <label style={LS}>Categoria *</label>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {TEMPLATE_CATS.filter(c=>c.id!=="all").map(c=>(
+                <button key={c.id} onClick={()=>upd("category",c.id)} style={{padding:"6px 14px",borderRadius:20,border:`1.5px solid ${form.category===c.id?c.color:T.n300}`,background:form.category===c.id?`${c.color}12`:T.n0,color:form.category===c.id?c.color:T.n400,fontFamily:T.font,fontSize:12,fontWeight:500,cursor:"pointer",transition:"all 200ms"}}>{c.label}</button>
+              ))}
+            </div>
+          </div>
+          <div style={{marginBottom:16}}>
+            <label style={LS}>Corpo da mensagem *</label>
+            <textarea value={form.body} onChange={e=>upd("body",e.target.value)} placeholder="Digite a mensagem..." style={{...IS,minHeight:160,resize:"vertical",lineHeight:1.6}}/>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginTop:8,flexWrap:"wrap"}}>
+              <span style={{fontSize:11,color:T.n400}}>Variáveis disponíveis:</span>
+              {["nome","servico","data","hora","profissional","valor","motivo"].map(v=>(
+                <button key={v} onClick={()=>upd("body",form.body+`{{${v}}}`)} style={{padding:"2px 8px",borderRadius:4,border:`1px solid ${T.n300}`,background:T.n100,color:T.n700,fontFamily:"monospace",fontSize:11,cursor:"pointer"}}>{"{{"+v+"}}"}</button>
+              ))}
+            </div>
+          </div>
+          {vars.length>0&&(
+            <div style={{padding:"12px 14px",background:T.n100,borderRadius:T.radiusMd,marginBottom:16}}>
+              <div style={{fontSize:12,fontWeight:600,color:T.n700,marginBottom:6}}>Variáveis detectadas:</div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {[...new Set(vars)].map(v=>(
+                  <span key={v} style={{padding:"3px 10px",borderRadius:4,background:T.primary50,color:T.primary500,fontSize:11,fontWeight:500}}>{"{{"+v+"}}"}</span>
+                ))}
+              </div>
+            </div>
+          )}
+          {/* Preview */}
+          <div>
+            <label style={LS}>Pré-visualização</label>
+            <div style={{background:"#E5DDD5",borderRadius:T.radiusMd,padding:16,minHeight:100}}>
+              <div style={{maxWidth:"85%",marginLeft:"auto",background:T.waLight,borderRadius:"10px 0 10px 10px",padding:"10px 14px",position:"relative"}}>
+                <div style={{fontSize:13,color:"#303030",whiteSpace:"pre-wrap",lineHeight:1.6}}>{form.body.replace(/\{\{(\w+)\}\}/g,(m,v)=>`[${v}]`).replace(/\*([^*]+)\*/g,"$1")}</div>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:4,marginTop:4}}>
+                  <span style={{fontSize:10,color:"#8A8A8A"}}>14:00</span>
+                  <CheckCircle2 size={12} color={T.primary500}/>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
+        <div style={{padding:"16px 24px",borderTop:`1px solid ${T.n200}`,display:"flex",justifyContent:"space-between"}}>
+          <button onClick={()=>onClose()} style={{padding:"11px 18px",borderRadius:T.radiusMd,border:`1.5px solid ${T.n300}`,background:T.n0,color:T.n700,fontFamily:T.font,fontSize:14,fontWeight:500,cursor:"pointer"}}>Cancelar</button>
+          <button onClick={save} disabled={saving} style={{padding:"11px 20px",borderRadius:T.radiusMd,border:"none",background:T.wa,color:T.n0,fontFamily:T.font,fontSize:14,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:6,opacity:saving?0.7:1,transition:"all 200ms"}}>
+            {saving?<Loader2 size={15} className="spin"/>:<Check size={15}/>} {isEdit?"Salvar":"Criar template"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-        {/* Conversations */}
-        <div style={{ flex: 1, overflowY: 'auto' }}>
-          {filteredConvs.length === 0 ? (
-            <div style={{ padding: 24, textAlign: 'center', color: T.n400, fontSize: 13 }}>Nenhuma conversa</div>
-          ) : filteredConvs.map(conv => {
-            const isActive = conv.id === selectedConvId
-            return (
-              <button key={conv.id} onClick={() => setSelectedConvId(conv.id)}
-                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', border: 'none', background: isActive ? T.primary50 : 'transparent', cursor: 'pointer', fontFamily: T.font, textAlign: 'left', borderBottom: `1px solid ${T.n100}`, transition: 'background 100ms' }}
-                onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = T.n100 }}
-                onMouseLeave={e => { e.currentTarget.style.background = isActive ? T.primary50 : 'transparent' }}>
-                <div style={{ position: 'relative' }}>
-                  <Avatar name={conv.patient?.full_name || conv.phone} size={44} color={T.wa} />
-                  {conv.unread_count > 0 && <div style={{ position: 'absolute', top: -2, right: -2, width: 18, height: 18, borderRadius: '50%', background: T.wa, color: T.n0, fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `2px solid ${T.n0}` }}>{conv.unread_count}</div>}
+/* ═══ Broadcast Modal ═══ */
+function BroadcastModal({open,onClose,channel="uazapi"}){
+  const[step,setStep]=useState(1);
+  const[selectedTemplate,setSelectedTemplate]=useState(null);
+  const[selectedPatients,setSelectedPatients]=useState([]);
+  const[sending,setSending]=useState(false);
+  const allPatients=MOCK_CONVERSATIONS.map(c=>({id:c.id,name:c.patient,phone:c.phone,color:c.color}));
+
+  useEffect(()=>{if(open){setStep(1);setSelectedTemplate(null);setSelectedPatients([]);}},[open]);
+  const togglePatient=id=>setSelectedPatients(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);
+  const selectAll=()=>setSelectedPatients(prev=>prev.length===allPatients.length?[]:allPatients.map(p=>p.id));
+  const doSend=()=>{setSending(true);setTimeout(()=>{setSending(false);onClose("sent")},1500)};
+
+  if(!open) return null;
+  return(
+    <div onClick={()=>onClose()} style={{position:"fixed",inset:0,background:"rgba(17,17,17,0.4)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)",animation:"fadeIn 150ms ease"}}>
+      <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:520,background:T.n0,borderRadius:T.radiusLg,boxShadow:T.shadowLg,overflow:"hidden",animation:"slideUp 250ms ease",maxHeight:"88vh",display:"flex",flexDirection:"column"}}>
+        <div style={{padding:"20px 24px",borderBottom:`1px solid ${T.n200}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div><h2 style={{fontSize:18,fontWeight:700}}>Envio em massa</h2><div style={{fontSize:12,color:T.n400,marginTop:2}}>Etapa {step} de 3</div></div>
+          <button onClick={()=>onClose()} style={{width:32,height:32,borderRadius:8,border:"none",cursor:"pointer",background:"transparent",display:"flex",alignItems:"center",justifyContent:"center",color:T.n400}}><X size={18}/></button>
+        </div>
+        {/* Progress */}
+        <div style={{display:"flex",gap:4,padding:"12px 24px"}}>
+          {[1,2,3].map(s=><div key={s} style={{flex:1,height:4,borderRadius:2,background:s<=step?T.wa:T.n200,transition:"background 300ms"}}/>)}
+        </div>
+        <div style={{padding:"8px 24px 20px",overflowY:"auto",flex:1}}>
+          {step===1&&(
+            <div>
+              <div style={{fontSize:14,fontWeight:600,marginBottom:12}}>Selecione um template</div>
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {TEMPLATES.filter(t=>t.active).map(t=>{
+                  const sel=selectedTemplate?.id===t.id;
+                  const Icon=t.icon;
+                  return(
+                    <div key={t.id} onClick={()=>setSelectedTemplate(t)} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",borderRadius:T.radiusMd,border:`1.5px solid ${sel?T.wa:T.n300}`,background:sel?T.waBg:T.n0,cursor:"pointer",transition:"all 200ms"}}>
+                      <div style={{width:36,height:36,borderRadius:8,background:`${t.color}14`,display:"flex",alignItems:"center",justifyContent:"center"}}><Icon size={16} color={t.color}/></div>
+                      <div style={{flex:1}}><div style={{fontSize:14,fontWeight:500}}>{t.name}</div><div style={{fontSize:12,color:T.n400,marginTop:1}}>{t.body.substring(0,60)}...</div></div>
+                      {sel&&<CheckCircle2 size={18} color={T.wa}/>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {step===2&&(
+            <div>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+                <div style={{fontSize:14,fontWeight:600}}>Selecione os destinatários</div>
+                <button onClick={selectAll} style={{fontSize:12,color:T.primary500,border:"none",background:"none",cursor:"pointer",fontFamily:T.font,fontWeight:500}}>{selectedPatients.length===allPatients.length?"Desmarcar todos":"Selecionar todos"}</button>
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {allPatients.map(p=>{
+                  const sel=selectedPatients.includes(p.id);
+                  return(
+                    <div key={p.id} onClick={()=>togglePatient(p.id)} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:T.radiusMd,border:`1.5px solid ${sel?T.wa:T.n300}`,background:sel?T.waBg:T.n0,cursor:"pointer",transition:"all 200ms"}}>
+                      <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${sel?T.wa:T.n300}`,background:sel?T.wa:"transparent",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 200ms",flexShrink:0}}>{sel&&<Check size={11} color={T.n0}/>}</div>
+                      <div style={{width:32,height:32,borderRadius:8,background:`${p.color}14`,display:"flex",alignItems:"center",justifyContent:"center",color:p.color,fontWeight:600,fontSize:11,flexShrink:0}}>{getInitials(p.name)}</div>
+                      <div><div style={{fontSize:13,fontWeight:500}}>{p.name}</div><div style={{fontSize:11,color:T.n400}}>{p.phone}</div></div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{fontSize:12,color:T.n400,marginTop:8}}>{selectedPatients.length} destinatário(s) selecionado(s)</div>
+            </div>
+          )}
+          {step===3&&(
+            <div>
+              <div style={{fontSize:14,fontWeight:600,marginBottom:12}}>Confirmar envio</div>
+              <div style={{padding:"16px",background:T.n100,borderRadius:T.radiusMd,marginBottom:16}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><span style={{fontSize:13,color:T.n400}}>Template</span><span style={{fontSize:13,fontWeight:600}}>{selectedTemplate?.name}</span></div>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><span style={{fontSize:13,color:T.n400}}>Destinatários</span><span style={{fontSize:13,fontWeight:600}}>{selectedPatients.length} paciente(s)</span></div>
+                <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:13,color:T.n400}}>Canal</span><span style={{fontSize:13,fontWeight:600,color:T.wa}}>WhatsApp {channel==="uazapi"?"(número da clínica)":"(Meta API)"}</span></div>
+              </div>
+              <div style={{background:"#E5DDD5",borderRadius:T.radiusMd,padding:14}}>
+                <div style={{fontSize:11,color:"#8A8A8A",marginBottom:6}}>Pré-visualização:</div>
+                <div style={{maxWidth:"85%",marginLeft:"auto",background:T.waLight,borderRadius:"10px 0 10px 10px",padding:"10px 14px"}}>
+                  <div style={{fontSize:12,color:"#303030",whiteSpace:"pre-wrap",lineHeight:1.5}}>{selectedTemplate?.body.replace(/\{\{(\w+)\}\}/g,(m,v)=>`[${v}]`).replace(/\*([^*]+)\*/g,"$1")}</div>
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-                    <span style={{ fontSize: 14, fontWeight: conv.unread_count > 0 ? 600 : 400, color: T.n900, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{conv.patient?.full_name || conv.phone}</span>
-                    <span style={{ fontSize: 11, color: conv.unread_count > 0 ? T.wa : T.n400, flexShrink: 0 }}>{conv.last_message_at ? getRelTime(conv.last_message_at) : ''}</span>
-                  </div>
-                  <div style={{ fontSize: 12, color: T.n400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{conv.phone}</div>
-                </div>
-              </button>
-            )
-          })}
+              </div>
+              <div style={{padding:"12px 14px",background:T.warningBg,borderRadius:T.radiusMd,display:"flex",alignItems:"center",gap:8,marginTop:12}}>
+                <AlertTriangle size={14} color={T.warning}/>
+                <span style={{fontSize:12,color:T.n700}}>As mensagens serão enviadas imediatamente via WhatsApp Business API.</span>
+              </div>
+            </div>
+          )}
+        </div>
+        <div style={{padding:"16px 24px",borderTop:`1px solid ${T.n200}`,display:"flex",justifyContent:"space-between"}}>
+          <button onClick={()=>step>1?setStep(step-1):onClose()} style={{padding:"11px 18px",borderRadius:T.radiusMd,border:`1.5px solid ${T.n300}`,background:T.n0,color:T.n700,fontFamily:T.font,fontSize:14,fontWeight:500,cursor:"pointer"}}>{step>1?"Voltar":"Cancelar"}</button>
+          {step<3?(
+            <button onClick={()=>setStep(step+1)} disabled={(step===1&&!selectedTemplate)||(step===2&&selectedPatients.length===0)} style={{padding:"11px 20px",borderRadius:T.radiusMd,border:"none",background:T.wa,color:T.n0,fontFamily:T.font,fontSize:14,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:6,opacity:((step===1&&!selectedTemplate)||(step===2&&selectedPatients.length===0))?0.5:1,transition:"all 200ms"}}>Próximo <ChevRight size={15}/></button>
+          ):(
+            <button onClick={doSend} disabled={sending} style={{padding:"11px 20px",borderRadius:T.radiusMd,border:"none",background:T.wa,color:T.n0,fontFamily:T.font,fontSize:14,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:6,opacity:sending?0.7:1,transition:"all 200ms"}}>
+              {sending?<Loader2 size={15} className="spin"/>:<Send size={15}/>} Enviar {selectedPatients.length} mensagem(ns)
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══ MAIN CONTENT ═══ */
+export default function MessagesContent(){
+  const[tab,setTab]=useState("conversations");
+  const[search,setSearch]=useState("");
+  const[activeConv,setActiveConv]=useState(null);
+  const[newMsg,setNewMsg]=useState("");
+  const[templateCat,setTemplateCat]=useState("all");
+  const[templateModal,setTemplateModal]=useState(false);
+  const[editTemplate,setEditTemplate]=useState(null);
+  const[broadcastModal,setBroadcastModal]=useState(false);
+  const chatEndRef=useRef(null);
+
+  // Channel: simulates reading from clinic settings
+  // "uazapi" = Clínica Max (own number), "meta" = Standard (Meta API templates)
+  const[channel]=useState("uazapi");
+  const isMax=channel==="uazapi";
+
+  const filteredConvs=useMemo(()=>MOCK_CONVERSATIONS.filter(c=>!search||c.patient.toLowerCase().includes(search.toLowerCase())||c.phone.includes(search)),[search]);
+  const filteredTemplates=useMemo(()=>TEMPLATES.filter(t=>templateCat==="all"||t.category===templateCat),[templateCat]);
+  const totalUnread=MOCK_CONVERSATIONS.reduce((a,c)=>a+c.unread,0);
+
+  const conv=activeConv?MOCK_CONVERSATIONS.find(c=>c.id===activeConv):null;
+
+  useEffect(()=>{if(chatEndRef.current)chatEndRef.current.scrollIntoView({behavior:"smooth"})},[activeConv]);
+
+  const stats=useMemo(()=>{
+    const all=MOCK_CONVERSATIONS.flatMap(c=>c.messages.filter(m=>m.from==="clinic"));
+    return{
+      total:all.length,
+      sent:all.filter(m=>m.status==="sent").length,
+      delivered:all.filter(m=>m.status==="delivered").length,
+      read:all.filter(m=>m.status==="read").length,
+      failed:all.filter(m=>m.status==="failed").length,
+    };
+  },[]);
+
+  const tabs=[
+    {id:"conversations",label:"Conversas",count:totalUnread},
+    {id:"templates",label:"Templates",count:TEMPLATES.length},
+    {id:"analytics",label:"Métricas"},
+  ];
+
+  return(
+    <div style={{height:"calc(100vh - 64px)",display:"flex",flexDirection:"column"}}>
+      {/* Header */}
+      <div style={{padding:"16px 24px",borderBottom:`1px solid ${T.n200}`,display:"flex",alignItems:"center",justifyContent:"space-between",background:T.n0}}>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          {tabs.map(t=>{const active=tab===t.id;return(
+            <button key={t.id} onClick={()=>{setTab(t.id);setActiveConv(null)}} style={{display:"flex",alignItems:"center",gap:5,padding:"8px 16px",borderRadius:20,border:"none",cursor:"pointer",fontFamily:T.font,fontSize:13,fontWeight:active?600:400,color:active?T.n0:T.n700,background:active?T.waDark:"transparent",transition:"all 200ms"}}>
+              {t.label}
+              {t.count>0&&<span style={{fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:8,background:active?"rgba(255,255,255,0.25)":T.error,color:active?"rgba(255,255,255,0.9)":T.n0}}>{t.count}</span>}
+            </button>
+          )})}
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={()=>setBroadcastModal(true)} style={{padding:"8px 16px",borderRadius:T.radiusMd,border:`1.5px solid ${T.n300}`,background:T.n0,color:T.n700,fontFamily:T.font,fontSize:13,fontWeight:500,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
+            <Send size={13}/> Envio em massa
+          </button>
+          {tab==="templates"&&(
+            <button onClick={()=>{setEditTemplate(null);setTemplateModal(true)}} style={{padding:"8px 16px",borderRadius:T.radiusMd,border:"none",background:T.wa,color:T.n0,fontFamily:T.font,fontSize:13,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
+              <Plus size={14}/> Novo template
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Chat Area */}
-      {selectedConv ? (
-        <ChatView conv={selectedConv} channel={channel} templates={templates} />
-      ) : (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: T.n100 }}>
-          <EmptyState icon={MessageSquare} title="Selecione uma conversa" description="Escolha um contato para iniciar" />
+      {/* Channel info banner */}
+      <div style={{padding:"10px 24px",background:isMax?T.waBg:`${T.info}08`,borderBottom:`1px solid ${isMax?"rgba(37,211,102,0.12)":"rgba(37,99,235,0.08)"}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:28,height:28,borderRadius:7,background:isMax?T.wa:T.info,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            {isMax?<Smartphone size={14} color={T.n0}/>:<Globe size={14} color={T.n0}/>}
+          </div>
+          <div>
+            <div style={{fontSize:13,fontWeight:600,color:isMax?T.waDark:T.info}}>
+              {isMax?"Clínica Max — UAZAPI":"Plano Standard — Meta API"}
+            </div>
+            <div style={{fontSize:11,color:T.n400}}>
+              {isMax?"Mensagens enviadas com o número da clínica (+55 11 98765-4321)":"Notificações enviadas via templates aprovados pela Meta"}
+            </div>
+          </div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          {isMax&&<div style={{display:"flex",alignItems:"center",gap:4,padding:"4px 10px",borderRadius:12,background:"rgba(37,211,102,0.12)"}}><div style={{width:6,height:6,borderRadius:"50%",background:T.wa}}/><span style={{fontSize:11,fontWeight:600,color:T.wa}}>Conectado</span></div>}
+          <button style={{padding:"5px 12px",borderRadius:T.radiusSm,border:`1px solid ${T.n300}`,background:T.n0,color:T.n400,fontFamily:T.font,fontSize:11,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}>
+            <Settings size={11}/> Configurar
+          </button>
+        </div>
+      </div>
+
+      {/* ══════ CONVERSATIONS ══════ */}
+      {tab==="conversations"&&(
+        <div style={{flex:1,display:"flex",overflow:"hidden"}}>
+          {/* List */}
+          <div style={{width:360,borderRight:`1px solid ${T.n200}`,background:T.n0,display:"flex",flexDirection:"column",flexShrink:0}}>
+            <div style={{padding:"12px 16px",borderBottom:`1px solid ${T.n200}`}}>
+              <div style={{display:"flex",alignItems:"center",border:`1.5px solid ${T.n300}`,borderRadius:T.radiusMd,background:T.n100,overflow:"hidden"}}>
+                <span style={{paddingLeft:10,color:T.n400,display:"flex"}}><Search size={15}/></span>
+                <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar conversa..." style={{flex:1,border:"none",outline:"none",padding:"9px 10px",fontSize:13,fontFamily:T.font,color:T.n900,background:"transparent"}}/>
+              </div>
+            </div>
+            <div style={{flex:1,overflowY:"auto"}}>
+              {filteredConvs.map(c=>{
+                const active=activeConv===c.id;
+                const stCfg=STATUS_CFG[c.status];
+                return(
+                  <div key={c.id} onClick={()=>setActiveConv(c.id)} style={{display:"flex",alignItems:"center",gap:12,padding:"14px 16px",borderBottom:`1px solid ${T.n100}`,cursor:"pointer",background:active?T.primary50:"transparent",transition:"background 150ms"}}
+                    onMouseEnter={e=>{if(!active)e.currentTarget.style.background=T.n100}}
+                    onMouseLeave={e=>{e.currentTarget.style.background=active?T.primary50:"transparent"}}>
+                    <div style={{position:"relative",flexShrink:0}}>
+                      <div style={{width:42,height:42,borderRadius:12,background:`${c.color}14`,display:"flex",alignItems:"center",justifyContent:"center",color:c.color,fontWeight:600,fontSize:14}}>{getInitials(c.patient)}</div>
+                      {c.unread>0&&<div style={{position:"absolute",top:-2,right:-2,width:18,height:18,borderRadius:"50%",background:T.wa,color:T.n0,fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",border:`2px solid ${T.n0}`}}>{c.unread}</div>}
+                    </div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                        <span style={{fontSize:14,fontWeight:c.unread?700:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.patient}</span>
+                        <span style={{fontSize:11,color:T.n400,flexShrink:0}}>{timeAgo(c.lastTime)}</span>
+                      </div>
+                      <div style={{display:"flex",alignItems:"center",gap:4,marginTop:3}}>
+                        {c.messages[c.messages.length-1]?.from==="clinic"&&<MsgStatus status={c.status}/>}
+                        <span style={{fontSize:12,color:c.unread?T.n900:T.n400,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:c.unread?500:400}}>{c.lastMsg}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Chat */}
+          {conv?(
+            <div style={{flex:1,display:"flex",flexDirection:"column",background:"#E5DDD5"}}>
+              {/* Chat header */}
+              <div style={{padding:"12px 20px",background:T.waDark,display:"flex",alignItems:"center",gap:12}}>
+                <div style={{width:38,height:38,borderRadius:10,background:"rgba(255,255,255,0.15)",display:"flex",alignItems:"center",justifyContent:"center",color:T.n0,fontWeight:600,fontSize:14}}>{getInitials(conv.patient)}</div>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:14,fontWeight:600,color:T.n0}}>{conv.patient}</div>
+                  <div style={{fontSize:12,color:"rgba(255,255,255,0.6)"}}>{conv.phone}</div>
+                </div>
+                <div style={{padding:"4px 10px",borderRadius:10,background:"rgba(255,255,255,0.12)",fontSize:10,color:"rgba(255,255,255,0.7)",fontWeight:500,display:"flex",alignItems:"center",gap:4}}>
+                  {isMax?<><Smartphone size={10}/> Número da clínica</>:<><Globe size={10}/> Meta API</>}
+                </div>
+                <button style={{padding:"6px 12px",borderRadius:T.radiusSm,border:"1px solid rgba(255,255,255,0.2)",background:"transparent",color:T.n0,fontFamily:T.font,fontSize:11,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}>
+                  <Phone size={12}/> Ligar
+                </button>
+              </div>
+
+              {/* Messages */}
+              <div style={{flex:1,overflowY:"auto",padding:"16px 20px",display:"flex",flexDirection:"column",gap:6}}>
+                {conv.messages.map((msg,i)=>{
+                  const isClinic=msg.from==="clinic";
+                  const showDate=i===0||fmtDate(conv.messages[i-1].time)!==fmtDate(msg.time);
+                  return(
+                    <div key={msg.id}>
+                      {showDate&&<div style={{textAlign:"center",margin:"8px 0"}}><span style={{fontSize:11,color:"#8A8A8A",background:"rgba(255,255,255,0.7)",padding:"3px 12px",borderRadius:8}}>{fmtDate(msg.time)}</span></div>}
+                      <div style={{display:"flex",justifyContent:isClinic?"flex-end":"flex-start",marginBottom:2}}>
+                        <div style={{maxWidth:"75%",background:isClinic?T.waLight:T.n0,borderRadius:isClinic?"10px 0 10px 10px":"0 10px 10px 10px",padding:"8px 12px",boxShadow:"0 1px 2px rgba(0,0,0,0.06)"}}>
+                          {msg.template&&<div style={{fontSize:10,color:T.wa,fontWeight:600,marginBottom:4,display:"flex",alignItems:"center",gap:3}}><Zap size={10}/> {msg.template}</div>}
+                          <div style={{fontSize:13,color:"#303030",whiteSpace:"pre-wrap",lineHeight:1.5}}>{msg.text.replace(/\*([^*]+)\*/g,"$1")}</div>
+                          <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:4,marginTop:4}}>
+                            <span style={{fontSize:10,color:"#8A8A8A"}}>{fmtTime(msg.time)}</span>
+                            {isClinic&&<MsgStatus status={msg.status}/>}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div ref={chatEndRef}/>
+              </div>
+
+              {/* Input */}
+              {isMax?(
+                /* UAZAPI: free text messaging */
+                <div style={{padding:"10px 16px",background:T.n0,borderTop:`1px solid ${T.n200}`,display:"flex",alignItems:"center",gap:10}}>
+                  <button style={{width:36,height:36,borderRadius:8,border:"none",background:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:T.n400}}><Smile size={20}/></button>
+                  <button style={{width:36,height:36,borderRadius:8,border:"none",background:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:T.n400}}><Paperclip size={20}/></button>
+                  <input value={newMsg} onChange={e=>setNewMsg(e.target.value)} placeholder="Digite uma mensagem..." style={{flex:1,border:`1.5px solid ${T.n300}`,borderRadius:24,padding:"10px 16px",fontSize:14,fontFamily:T.font,color:T.n900,outline:"none",background:T.n100}} onKeyDown={e=>{if(e.key==="Enter"&&newMsg.trim()){setNewMsg("")}}}/>
+                  <button disabled={!newMsg.trim()} style={{width:40,height:40,borderRadius:10,border:"none",background:newMsg.trim()?T.wa:T.n300,cursor:newMsg.trim()?"pointer":"not-allowed",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 200ms"}}>
+                    <Send size={18} color={T.n0}/>
+                  </button>
+                </div>
+              ):(
+                /* Meta API: template-only sending */
+                <div style={{padding:"12px 16px",background:T.n0,borderTop:`1px solid ${T.n200}`}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <div style={{flex:1,padding:"10px 16px",borderRadius:24,background:T.n100,border:`1.5px solid ${T.n200}`,fontSize:13,color:T.n400,display:"flex",alignItems:"center",gap:6}}>
+                      <AlertCircle size={14}/>
+                      Plano Standard: envie mensagens apenas via templates aprovados
+                    </div>
+                    <button style={{padding:"10px 18px",borderRadius:10,border:"none",background:T.info,color:T.n0,fontFamily:T.font,fontSize:13,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:6,whiteSpace:"nowrap"}}>
+                      <Zap size={14}/> Enviar template
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ):(
+            <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",background:T.n100}}>
+              <div style={{textAlign:"center",color:T.n400}}>
+                <MessageSquare size={48} style={{margin:"0 auto 12px",opacity:0.2}}/>
+                <div style={{fontSize:16,fontWeight:500}}>Selecione uma conversa</div>
+                <div style={{fontSize:13,marginTop:4}}>Escolha um paciente para visualizar as mensagens</div>
+              </div>
+            </div>
+          )}
         </div>
       )}
-    </div>
-  )
-}
 
-function ChatView({ conv, channel, templates }) {
-  const { data: messages, loading, create } = useMessages(conv.id)
-  const [newMsg, setNewMsg] = useState('')
-  const [templateModal, setTemplateModal] = useState(false)
-  const [sending, setSending] = useState(false)
-  const scrollRef = useRef(null)
-
-  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight }, [messages])
-
-  const handleSend = async () => {
-    if (!newMsg.trim()) return; setSending(true)
-    await create({ conversation_id: conv.id, direction: 'outbound', content: newMsg, status: 'sent', message_type: 'text' })
-    setNewMsg(''); setSending(false)
-  }
-
-  const sendTemplate = async (tpl) => {
-    setSending(true)
-    await create({ conversation_id: conv.id, direction: 'outbound', content: tpl.content, status: 'sent', message_type: 'template', template_name: tpl.name })
-    setTemplateModal(false); setSending(false)
-  }
-
-  return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#F0F2F5' }}>
-      {/* Chat header */}
-      <div style={{ padding: '12px 20px', background: T.n0, borderBottom: `1px solid ${T.n200}`, display: 'flex', alignItems: 'center', gap: 12 }}>
-        <Avatar name={conv.patient?.full_name || conv.phone} size={40} color={T.wa} />
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 15, fontWeight: 600 }}>{conv.patient?.full_name || conv.phone}</div>
-          <div style={{ fontSize: 12, color: T.n400 }}>{conv.phone} • {channel === 'meta' ? 'Meta API' : 'UAZAPI'}</div>
-        </div>
-        <Button variant="ghost" size="sm" icon={Phone}>Ligar</Button>
-      </div>
-
-      {/* Messages */}
-      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '16px 60px' }}>
-        {loading ? <LoadingSpinner /> : messages.map(msg => (
-          <div key={msg.id} style={{ display: 'flex', justifyContent: msg.direction === 'outbound' ? 'flex-end' : 'flex-start', marginBottom: 6 }}>
-            <div style={{
-              maxWidth: '65%', padding: '8px 12px', borderRadius: 10,
-              background: msg.direction === 'outbound' ? '#DCF8C6' : T.n0,
-              boxShadow: '0 1px 1px rgba(0,0,0,0.06)',
-              borderTopRightRadius: msg.direction === 'outbound' ? 4 : 10,
-              borderTopLeftRadius: msg.direction === 'inbound' ? 4 : 10,
-            }}>
-              {msg.template_name && <div style={{ fontSize: 10, color: T.primary500, fontWeight: 600, marginBottom: 2 }}>📋 {msg.template_name}</div>}
-              <div style={{ fontSize: 14, lineHeight: 1.5, color: T.n900 }}>{msg.content}</div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 4 }}>
-                <span style={{ fontSize: 11, color: T.n400 }}>{new Date(msg.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
-                {msg.direction === 'outbound' && (() => {
-                  const Icon = STATUS_ICONS[msg.status]
-                  return Icon ? <Icon size={14} color={msg.status === 'read' ? '#53BDEB' : T.n400} /> : null
-                })()}
-              </div>
-            </div>
+      {/* ══════ TEMPLATES ══════ */}
+      {tab==="templates"&&(
+        <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
+          <div style={{display:"flex",gap:6,marginBottom:20,flexWrap:"wrap"}}>
+            {TEMPLATE_CATS.map(c=>(
+              <button key={c.id} onClick={()=>setTemplateCat(c.id)} style={{padding:"7px 16px",borderRadius:20,border:`1.5px solid ${templateCat===c.id?(c.color||T.waDark):T.n300}`,background:templateCat===c.id?(c.color?`${c.color}12`:T.waBg):T.n0,color:templateCat===c.id?(c.color||T.waDark):T.n400,fontFamily:T.font,fontSize:12,fontWeight:500,cursor:"pointer",transition:"all 200ms"}}>{c.label}</button>
+            ))}
           </div>
-        ))}
-      </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(340px, 1fr))",gap:14}}>
+            {filteredTemplates.map((t,i)=>{
+              const Icon=t.icon;
+              const cat=TEMPLATE_CATS.find(c=>c.id===t.category);
+              return(
+                <div key={t.id} style={{background:T.n0,borderRadius:T.radiusLg,border:`1px solid ${T.n200}`,boxShadow:T.shadowSoft,overflow:"hidden",transition:"all 200ms",animation:`fadeSlideUp 0.3s ease ${i*0.04}s both`,cursor:"pointer"}}
+                  onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 4px 12px rgba(0,0,0,0.07)";e.currentTarget.style.transform="translateY(-1px)"}}
+                  onMouseLeave={e=>{e.currentTarget.style.boxShadow=T.shadowSoft;e.currentTarget.style.transform="none"}}>
+                  <div style={{height:3,background:t.color}}/>
+                  <div style={{padding:"18px 20px"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+                      <div style={{width:38,height:38,borderRadius:10,background:`${t.color}14`,display:"flex",alignItems:"center",justifyContent:"center"}}><Icon size={17} color={t.color}/></div>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:15,fontWeight:600}}>{t.name}</div>
+                        <Badge color={cat?.color||T.n400} bg={`${cat?.color||T.n400}12`}>{cat?.label}</Badge>
+                      </div>
+                      <button onClick={()=>{setEditTemplate(t);setTemplateModal(true)}} style={{width:30,height:30,borderRadius:6,border:`1px solid ${T.n200}`,background:T.n0,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:T.n400}}><Edit3 size={13}/></button>
+                    </div>
 
-      {/* Input */}
-      <div style={{ padding: '12px 20px', background: T.n0, borderTop: `1px solid ${T.n200}` }}>
-        {channel === 'meta' ? (
-          // Meta: template only
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ flex: 1, padding: '10px 14px', background: T.n100, borderRadius: T.radiusMd, fontSize: 13, color: T.n400 }}>
-              Canal Meta API — apenas templates aprovados
-            </div>
-            <Button icon={FileText} variant="wa" onClick={() => setTemplateModal(true)}>Enviar template</Button>
-          </div>
-        ) : (
-          // UAZAPI: free text
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button onClick={() => setTemplateModal(true)} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: T.n100, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FileText size={16} color={T.n400} /></button>
-            <input value={newMsg} onChange={e => setNewMsg(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
-              placeholder="Digite uma mensagem..." style={{ flex: 1, padding: '10px 14px', border: `1.5px solid ${T.n300}`, borderRadius: 24, fontSize: 14, fontFamily: T.font, outline: 'none' }} />
-            <button onClick={handleSend} disabled={!newMsg.trim() || sending}
-              style={{ width: 40, height: 40, borderRadius: '50%', border: 'none', background: T.wa, cursor: newMsg.trim() ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: newMsg.trim() ? 1 : 0.5 }}>
-              <Send size={18} color={T.n0} />
-            </button>
-          </div>
-        )}
-      </div>
+                    {/* Mini preview */}
+                    <div style={{background:"#E5DDD5",borderRadius:T.radiusMd,padding:12,marginBottom:12}}>
+                      <div style={{maxWidth:"90%",marginLeft:"auto",background:T.waLight,borderRadius:"8px 0 8px 8px",padding:"8px 10px"}}>
+                        <div style={{fontSize:11,color:"#303030",whiteSpace:"pre-wrap",lineHeight:1.4,maxHeight:80,overflow:"hidden"}}>{t.body.replace(/\{\{(\w+)\}\}/g,(m,v)=>`[${v}]`).replace(/\*([^*]+)\*/g,"$1")}</div>
+                      </div>
+                    </div>
 
-      {/* Template Modal */}
-      <Modal open={templateModal} onClose={() => setTemplateModal(false)} title="Templates de mensagem" width={500}>
-        {templates.length === 0 ? <EmptyState icon={FileText} title="Nenhum template" description="Crie templates em Configurações" /> :
-          templates.filter(t => t.is_active).map(tpl => (
-            <button key={tpl.id} onClick={() => sendTemplate(tpl)}
-              style={{ width: '100%', display: 'flex', alignItems: 'flex-start', gap: 12, padding: '14px 16px', border: `1px solid ${T.n200}`, borderRadius: T.radiusMd, background: T.n0, cursor: 'pointer', fontFamily: T.font, textAlign: 'left', marginBottom: 8, transition: 'all 150ms' }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = T.wa; e.currentTarget.style.background = T.waBg }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = T.n200; e.currentTarget.style.background = T.n0 }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                  <span style={{ fontSize: 14, fontWeight: 600 }}>{tpl.name}</span>
-                  <Badge color={tpl.approved ? T.success : T.warning} bg={tpl.approved ? T.successBg : T.warningBg}>{tpl.approved ? 'Aprovado' : 'Pendente'}</Badge>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                      <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                        {t.variables.slice(0,3).map(v=>(
+                          <span key={v} style={{fontSize:10,padding:"2px 7px",borderRadius:4,background:T.n100,color:T.n400,fontFamily:"monospace"}}>{"{{"+v+"}}"}</span>
+                        ))}
+                        {t.variables.length>3&&<span style={{fontSize:10,color:T.n400}}>+{t.variables.length-3}</span>}
+                      </div>
+                      <button style={{padding:"6px 12px",borderRadius:T.radiusSm,border:"none",background:T.wa,color:T.n0,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:T.font,display:"flex",alignItems:"center",gap:4}}><Send size={11}/> Usar</button>
+                    </div>
+                  </div>
                 </div>
-                <div style={{ fontSize: 13, color: T.n500, lineHeight: 1.4 }}>{tpl.content?.slice(0, 120)}...</div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ══════ ANALYTICS ══════ */}
+      {tab==="analytics"&&(
+        <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:12,marginBottom:24}}>
+            {[
+              {label:"Enviadas",value:stats.total,icon:Send,color:T.waDark,delay:0.05},
+              {label:"Entregues",value:stats.delivered,icon:CheckCircle2,color:T.info,delay:0.1},
+              {label:"Lidas",value:stats.read,icon:Eye,color:T.success,delay:0.15},
+              {label:"Pendentes",value:stats.sent,icon:Clock,color:T.warning,delay:0.2},
+              {label:"Falhas",value:stats.failed,icon:AlertCircle,color:T.error,delay:0.25},
+            ].map((s,i)=>{
+              const SIcon=s.icon;
+              return(
+                <div key={i} style={{background:T.n0,borderRadius:T.radiusLg,padding:"18px 20px",boxShadow:T.shadowSoft,border:`1px solid ${T.n200}`,animation:`fadeSlideUp 0.35s ease ${s.delay}s both`,textAlign:"center"}}>
+                  <div style={{width:40,height:40,borderRadius:10,background:`${s.color}14`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 8px"}}><SIcon size={18} color={s.color}/></div>
+                  <div style={{fontSize:26,fontWeight:700}}>{s.value}</div>
+                  <div style={{fontSize:12,color:T.n400,marginTop:2}}>{s.label}</div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Delivery funnel */}
+          <div style={{background:T.n0,borderRadius:T.radiusLg,border:`1px solid ${T.n200}`,boxShadow:T.shadowSoft,padding:24,marginBottom:16,animation:"fadeSlideUp 0.35s ease 0.1s both"}}>
+            <div style={{fontSize:15,fontWeight:600,marginBottom:16}}>Funil de entrega</div>
+            <div style={{display:"flex",alignItems:"center",gap:0}}>
+              {[
+                {label:"Enviadas",value:stats.total,color:T.n700,pct:100},
+                {label:"Entregues",value:stats.delivered+stats.read,color:T.info,pct:Math.round(((stats.delivered+stats.read)/stats.total)*100)},
+                {label:"Lidas",value:stats.read,color:T.success,pct:Math.round((stats.read/stats.total)*100)},
+              ].map((s,i)=>(
+                <div key={i} style={{flex:1,textAlign:"center"}}>
+                  <div style={{height:48,background:`${s.color}${i===0?"14":"20"}`,borderRadius:i===0?"8px 0 0 8px":i===2?"0 8px 8px 0":"0",display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
+                    <div style={{height:"100%",width:`${s.pct}%`,background:`${s.color}30`,borderRadius:"inherit",position:"absolute",left:0,top:0,transition:"width 800ms ease"}}/>
+                    <span style={{fontSize:18,fontWeight:700,color:s.color,position:"relative",zIndex:1}}>{s.value}</span>
+                  </div>
+                  <div style={{fontSize:12,color:T.n400,marginTop:6}}>{s.label}</div>
+                  <div style={{fontSize:16,fontWeight:700,color:s.color}}>{s.pct}%</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+            <div style={{background:T.n0,borderRadius:T.radiusLg,border:`1px solid ${T.n200}`,boxShadow:T.shadowSoft,padding:24,animation:"fadeSlideUp 0.35s ease 0.15s both"}}>
+              <div style={{fontSize:15,fontWeight:600,marginBottom:16}}>Templates mais usados</div>
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                {[
+                  {name:"Lembrete de consulta",count:245,pct:48,color:T.primary500},
+                  {name:"Confirmação de agendamento",count:128,pct:25,color:T.success},
+                  {name:"Retorno / Follow-up",count:62,pct:12,color:T.teal},
+                  {name:"Aniversário",count:38,pct:7,color:T.pink},
+                  {name:"Cobrança pendente",count:32,pct:6,color:T.warning},
+                ].map((t,i)=>(
+                  <div key={i}>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                      <span style={{fontSize:13,color:T.n700}}>{t.name}</span>
+                      <span style={{fontSize:12,fontWeight:600}}>{t.count} <span style={{color:T.n400,fontWeight:400}}>({t.pct}%)</span></span>
+                    </div>
+                    <div style={{height:5,background:T.n200,borderRadius:3,overflow:"hidden"}}>
+                      <div style={{height:"100%",width:`${t.pct}%`,background:t.color,borderRadius:3,transition:"width 600ms ease"}}/>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <ArrowRight size={16} color={T.n300} style={{ marginTop: 4, flexShrink: 0 }} />
-            </button>
-          ))
-        }
-      </Modal>
+            </div>
+
+            <div style={{background:T.n0,borderRadius:T.radiusLg,border:`1px solid ${T.n200}`,boxShadow:T.shadowSoft,padding:24,animation:"fadeSlideUp 0.35s ease 0.2s both"}}>
+              <div style={{fontSize:15,fontWeight:600,marginBottom:16}}>Taxa de resposta</div>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"center",marginBottom:20}}>
+                <div style={{width:140,height:140,borderRadius:"50%",background:`conic-gradient(${T.wa} 0% 68%, ${T.n200} 68% 100%)`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <div style={{width:108,height:108,borderRadius:"50%",background:T.n0,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column"}}>
+                    <span style={{fontSize:32,fontWeight:700,color:T.wa}}>68%</span>
+                    <span style={{fontSize:11,color:T.n400}}>respondem</span>
+                  </div>
+                </div>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                {[
+                  {label:"Tempo médio de resposta",value:"2h 15min",color:T.primary500},
+                  {label:"Confirmações via WhatsApp",value:"82%",color:T.success},
+                  {label:"Cancelamentos via chat",value:"12%",color:T.error},
+                  {label:"Reagendamentos via chat",value:"6%",color:T.warning},
+                ].map((m,i)=>(
+                  <div key={i} style={{padding:"12px",background:T.n100,borderRadius:T.radiusMd,textAlign:"center"}}>
+                    <div style={{fontSize:18,fontWeight:700,color:m.color}}>{m.value}</div>
+                    <div style={{fontSize:11,color:T.n400,marginTop:3}}>{m.label}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <TemplateModal open={templateModal} onClose={()=>{setTemplateModal(false);setEditTemplate(null)}} template={editTemplate}/>
+      <BroadcastModal open={broadcastModal} onClose={()=>setBroadcastModal(false)} channel={channel}/>
     </div>
-  )
+  );
 }
 
-function getRelTime(dateStr) {
-  const d = Date.now() - new Date(dateStr).getTime(), m = Math.floor(d / 60000)
-  if (m < 1) return 'agora'; if (m < 60) return `${m} min`
-  const h = Math.floor(m / 60); if (h < 24) return `${h}h`
-  return `${Math.floor(h / 24)}d`
-}
+/* ═══ MAIN EXPORT ═══ */
+

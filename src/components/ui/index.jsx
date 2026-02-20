@@ -249,30 +249,44 @@ export function LoadingSpinner({ size = 24 }) {
 }
 
 // ═══ Stat Card ═══
-export function StatCard({ label, value, icon: Icon, color, trend, trendUp }) {
+export function StatCard({ label, value, icon: Icon, color, trend, trendUp, subtext, delay = 0 }) {
   return (
-    <Card>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-        <div>
-          <div style={{ fontSize: 13, color: T.n400, marginBottom: 6 }}>{label}</div>
-          <div style={{ fontSize: 28, fontWeight: 700, color: T.n900 }}>{value}</div>
-          {trend && (
-            <div style={{ fontSize: 12, color: trendUp ? T.success : T.error, marginTop: 4, fontWeight: 500 }}>
-              {trendUp ? '↑' : '↓'} {trend}
-            </div>
-          )}
-        </div>
+    <div style={{
+      background: T.n0, borderRadius: T.radiusLg, padding: '22px 24px',
+      boxShadow: T.shadowSoft, border: `1px solid ${T.n200}`,
+      display: 'flex', flexDirection: 'column', gap: 14,
+      transition: 'box-shadow 200ms, transform 200ms', cursor: 'default',
+      animation: `fadeSlideUp 0.4s ease ${delay}s both`,
+    }}
+      onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.06)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
+      onMouseLeave={(e) => { e.currentTarget.style.boxShadow = T.shadowSoft; e.currentTarget.style.transform = 'none' }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         {Icon && (
           <div style={{
-            width: 44, height: 44, borderRadius: 12,
-            background: `${color || T.primary500}14`,
+            width: 42, height: 42, borderRadius: 10,
+            background: color ? `${color}14` : T.primary50,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <Icon size={22} color={color || T.primary500} />
+            <Icon size={20} color={color || T.primary500} />
+          </div>
+        )}
+        {trend && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600,
+            color: trendUp ? T.success : T.error, padding: '4px 8px',
+            borderRadius: 6, background: trendUp ? 'rgba(22,163,74,0.08)' : 'rgba(220,38,38,0.08)',
+          }}>
+            {trendUp ? '↑' : '↓'} {trend}
           </div>
         )}
       </div>
-    </Card>
+      <div>
+        <div style={{ fontSize: 28, fontWeight: 700, color: T.n900, letterSpacing: '-0.02em', lineHeight: 1.1 }}>{value}</div>
+        <div style={{ fontSize: 13, color: T.n400, marginTop: 4 }}>{label}</div>
+      </div>
+      {subtext && <div style={{ fontSize: 12, color: T.n700, marginTop: -4 }}>{subtext}</div>}
+    </div>
   )
 }
 
