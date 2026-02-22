@@ -1,14 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import {
-  AlertCircle, Check, CheckCircle2, Clock, DollarSign, Edit3, Eye, Globe, List,
-  Loader2, MessageSquare, Paperclip, Phone, Plus, RefreshCw, Search, Send,
-  Settings, Smile, X
-} from 'lucide-react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import { AlertCircle, AlertTriangle, Archive, ArrowLeft, Bot, Check, CheckCheck, ChevronDown, Clock, Copy, DollarSign, Download, Edit3, ExternalLink, Eye, FileText, Filter, Globe, Hash, Heart, Image, Loader2, MessageSquare, Mic, MoreVertical, Paperclip, Phone, Plus, RefreshCw, Search, Send, Settings, Smartphone, Smile, Star, Template, Trash2, User, Users, Video, X, Zap } from 'lucide-react'
 import { T } from '@/utils/theme'
-import { useAppStore } from '@/lib/store'
+import { Button, Modal, InputField, Badge, Avatar, EmptyState, LoadingSpinner, getInitials } from '@/components/ui'
+import { useConversations, useMessages, useMessageTemplates, usePatients } from '@/lib/hooks'
 
 /* ─── Design Tokens ─── */
-function getInitials(n){return n.split(" ").map(w=>w[0]).filter(Boolean).slice(0,2).join("").toUpperCase();}
+
 function timeAgo(d){const now=Date.now(),diff=now-new Date(d).getTime(),m=Math.floor(diff/60000);if(m<1)return"agora";if(m<60)return`${m}min`;const h=Math.floor(m/60);if(h<24)return`${h}h`;const dy=Math.floor(h/24);return dy===1?"ontem":`${dy}d`;}
 function fmtTime(d){return new Date(d).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});}
 function fmtDate(d){return new Date(d).toLocaleDateString("pt-BR",{day:"2-digit",month:"short"});}
@@ -34,46 +31,7 @@ const TEMPLATE_CATS = [
 ];
 
 /* ─── Mock Conversations ─── */
-const MOCK_CONVERSATIONS = [
-  {id:1,patient:"Maria Silva",phone:"(11) 98765-4321",color:T.primary500,unread:2,lastMsg:"Confirmado! Estarei lá no horário.",lastTime:"2025-01-20T16:45:00",status:"delivered",
-    messages:[
-      {id:1,from:"clinic",text:"Olá Maria! 😊\n\nLembramos que sua consulta de Psicoterapia Individual está agendada para amanhã, 21/01, às 10:00 com Dra. Ana Costa.\n\nPor favor, confirme sua presença respondendo esta mensagem.\n\nAté lá! 💙",time:"2025-01-20T14:00:00",status:"read",template:"Lembrete de consulta"},
-      {id:2,from:"patient",text:"Oi! Sim, confirmo. Estarei lá no horário.",time:"2025-01-20T16:30:00"},
-      {id:3,from:"patient",text:"Confirmado! Estarei lá no horário.",time:"2025-01-20T16:45:00"},
-    ]},
-  {id:2,patient:"João Santos",phone:"(11) 91234-5678",color:T.success,unread:0,lastMsg:"Agendamento confirmado ✅",lastTime:"2025-01-20T15:20:00",status:"read",
-    messages:[
-      {id:1,from:"clinic",text:"Olá João! ✅\n\nSeu agendamento foi confirmado!\n\n📅 22/01 às 14:00\n👩‍⚕️ Dr. Carlos Lima\n📋 Fisioterapia Geral\n\nClínica Terapee 💙",time:"2025-01-20T15:00:00",status:"read",template:"Confirmação de agendamento"},
-      {id:2,from:"patient",text:"Obrigado! Agendamento confirmado ✅",time:"2025-01-20T15:20:00"},
-    ]},
-  {id:3,patient:"Ana Oliveira",phone:"(11) 99876-5432",color:T.warning,unread:1,lastMsg:"Preciso reagendar minha consulta de quinta",lastTime:"2025-01-20T12:10:00",status:"delivered",
-    messages:[
-      {id:1,from:"clinic",text:"Olá Ana! 😊\n\nLembramos que sua consulta está agendada para quinta, 23/01, às 09:00.\n\nPor favor, confirme sua presença.\n\nAté lá! 💙",time:"2025-01-20T10:00:00",status:"read",template:"Lembrete de consulta"},
-      {id:2,from:"patient",text:"Oi, bom dia! Preciso reagendar minha consulta de quinta",time:"2025-01-20T12:10:00"},
-    ]},
-  {id:4,patient:"Pedro Costa",phone:"(11) 92345-6789",color:T.purple,unread:0,lastMsg:"Lembrete enviado automaticamente",lastTime:"2025-01-20T08:00:00",status:"sent",
-    messages:[
-      {id:1,from:"clinic",text:"Olá Pedro! 😊\n\nLembramos que sua consulta de Terapia Ocupacional está agendada para hoje, 20/01, às 14:00 com Dr. Ricardo Alves.\n\nPor favor, confirme sua presença.\n\nAté lá! 💙",time:"2025-01-20T08:00:00",status:"sent",template:"Lembrete de consulta"},
-    ]},
-  {id:5,patient:"Carla Mendes",phone:"(11) 93456-7890",color:T.teal,unread:0,lastMsg:"Feliz aniversário! 🎂",lastTime:"2025-01-19T09:00:00",status:"read",
-    messages:[
-      {id:1,from:"clinic",text:"Olá Carla! 🎂🎉\n\nA equipe da Clínica Terapee deseja um Feliz Aniversário!\n\nQue seu dia seja repleto de alegria, saúde e realizações.\n\nUm abraço carinhoso! 💙✨",time:"2025-01-19T09:00:00",status:"read",template:"Aniversário"},
-      {id:2,from:"patient",text:"Que lindo! Muito obrigada, equipe! ❤️😊",time:"2025-01-19T10:15:00"},
-    ]},
-  {id:6,patient:"Roberto Alves",phone:"(11) 94567-8901",color:T.orange,unread:0,lastMsg:"Cobrança enviada",lastTime:"2025-01-18T11:00:00",status:"delivered",
-    messages:[
-      {id:1,from:"clinic",text:"Olá Roberto,\n\nIdentificamos uma pendência referente à consulta de Fisioterapia realizada em 10/01, no valor de R$ 150,00.\n\nPara pagamento via Pix, utilize a chave: 12.345.678/0001-01\n\nEm caso de dúvidas, estamos à disposição.\n\nClínica Terapee",time:"2025-01-18T11:00:00",status:"delivered",template:"Cobrança pendente"},
-    ]},
-  {id:7,patient:"Fernanda Lima",phone:"(11) 95678-9012",color:T.pink,unread:0,lastMsg:"Vou agendar sim! Pode ser semana que vem?",lastTime:"2025-01-17T14:30:00",status:"read",
-    messages:[
-      {id:1,from:"clinic",text:"Olá Fernanda! 👋\n\nFaz um tempo desde sua última consulta. Gostaríamos de saber como você está!\n\nDeseja agendar um retorno?\n\nClínica Terapee 💙",time:"2025-01-17T10:00:00",status:"read",template:"Retorno / Follow-up"},
-      {id:2,from:"patient",text:"Oi! Que bom que entraram em contato. Vou agendar sim! Pode ser semana que vem?",time:"2025-01-17T14:30:00"},
-    ]},
-  {id:8,patient:"Lucas Ferreira",phone:"(11) 96789-0123",color:T.info,unread:0,lastMsg:"Mensagem não entregue",lastTime:"2025-01-16T09:00:00",status:"failed",
-    messages:[
-      {id:1,from:"clinic",text:"Olá Lucas! Lembramos da sua consulta amanhã às 11:00.\n\nClínica Terapee 💙",time:"2025-01-16T09:00:00",status:"failed",template:"Lembrete de consulta"},
-    ]},
-];
+/* ─── Conversations loaded from hooks ─── */
 
 const STATUS_CFG = {
   sent:      {label:"Enviado",     icon:Check,        color:T.n400},
@@ -84,8 +42,6 @@ const STATUS_CFG = {
 
 /* ═══ Sidebar ═══ */
 
-/* ═══ Shared ═══ */
-function Badge({children,color,bg}){return <span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"4px 10px",borderRadius:20,background:bg,color,fontSize:12,fontWeight:500,whiteSpace:"nowrap"}}>{children}</span>;}
 const IS={width:"100%",padding:"10px 12px",border:`1.5px solid ${T.n300}`,borderRadius:T.radiusMd,fontSize:14,fontFamily:T.font,color:T.n900,outline:"none",boxSizing:"border-box",background:T.n0};
 const LS={display:"block",fontSize:13,fontWeight:500,color:T.n700,marginBottom:5};
 
@@ -173,12 +129,13 @@ function TemplateModal({open,onClose,template}){
 }
 
 /* ═══ Broadcast Modal ═══ */
-function BroadcastModal({open,onClose,channel="uazapi"}){
+const COLORS = [T.primary500, T.success, T.warning, T.purple, T.teal, T.pink, T.info];
+function BroadcastModal({open,onClose,channel="uazapi",patients=[]}){
   const[step,setStep]=useState(1);
   const[selectedTemplate,setSelectedTemplate]=useState(null);
   const[selectedPatients,setSelectedPatients]=useState([]);
   const[sending,setSending]=useState(false);
-  const allPatients=MOCK_CONVERSATIONS.map(c=>({id:c.id,name:c.patient,phone:c.phone,color:c.color}));
+  const allPatients=patients;
 
   useEffect(()=>{if(open){setStep(1);setSelectedTemplate(null);setSelectedPatients([]);}},[open]);
   const togglePatient=id=>setSelectedPatients(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);
@@ -274,7 +231,11 @@ function BroadcastModal({open,onClose,channel="uazapi"}){
 }
 
 /* ═══ MAIN CONTENT ═══ */
-export default function MessagesContent(){
+export default function Mensagens(){
+  /* ─── Hooks ─── */
+  const { data: rawConversations } = useConversations();
+  const { data: rawPatients } = usePatients();
+
   const[tab,setTab]=useState("conversations");
   const[search,setSearch]=useState("");
   const[activeConv,setActiveConv]=useState(null);
@@ -285,21 +246,47 @@ export default function MessagesContent(){
   const[broadcastModal,setBroadcastModal]=useState(false);
   const chatEndRef=useRef(null);
 
+  // Load messages for active conversation
+  const { data: activeMessages } = useMessages(activeConv);
+
+  /* ─── Adapt conversations from hooks ─── */
+  const conversations = useMemo(() => rawConversations.map((c, idx) => ({
+    id: c.id,
+    patient: c.patient?.full_name || "Paciente",
+    phone: c.phone || "",
+    color: COLORS[idx % COLORS.length],
+    unread: c.unread_count || 0,
+    lastMsg: "",
+    lastTime: c.last_message_at || "",
+    status: "delivered",
+    messages: [], // loaded separately via useMessages
+  })), [rawConversations]);
+
   // Channel: simulates reading from clinic settings
-  // "uazapi" = Clínica Max (own number), "meta" = Standard (Meta API templates)
   const[channel]=useState("uazapi");
   const isMax=channel==="uazapi";
 
-  const filteredConvs=useMemo(()=>MOCK_CONVERSATIONS.filter(c=>!search||c.patient.toLowerCase().includes(search.toLowerCase())||c.phone.includes(search)),[search]);
+  const filteredConvs=useMemo(()=>conversations.filter(c=>!search||c.patient.toLowerCase().includes(search.toLowerCase())||c.phone.includes(search)),[search,conversations]);
   const filteredTemplates=useMemo(()=>TEMPLATES.filter(t=>templateCat==="all"||t.category===templateCat),[templateCat]);
-  const totalUnread=MOCK_CONVERSATIONS.reduce((a,c)=>a+c.unread,0);
+  const totalUnread=useMemo(()=>conversations.reduce((a,c)=>a+c.unread,0),[conversations]);
 
-  const conv=activeConv?MOCK_CONVERSATIONS.find(c=>c.id===activeConv):null;
+  // Active conversation with adapted messages
+  const conv=useMemo(()=>{
+    if(!activeConv)return null;
+    const base=conversations.find(c=>c.id===activeConv);
+    if(!base)return null;
+    return{...base, messages: activeMessages.map(m=>({
+      id:m.id, from:m.direction==="outbound"?"clinic":"patient",
+      text:m.content, time:m.created_at, status:m.status||"delivered",
+      template:m.message_type==="template"?m.template_name:undefined
+    }))};
+  },[activeConv,conversations,activeMessages]);
 
-  useEffect(()=>{if(chatEndRef.current)chatEndRef.current.scrollIntoView({behavior:"smooth"})},[activeConv]);
+  useEffect(()=>{if(chatEndRef.current)chatEndRef.current.scrollIntoView({behavior:"smooth"})},[activeConv,activeMessages]);
 
   const stats=useMemo(()=>{
-    const all=MOCK_CONVERSATIONS.flatMap(c=>c.messages.filter(m=>m.from==="clinic"));
+    // Stats computed from active messages only (full stats need all messages loaded)
+    const all=activeMessages.filter(m=>m.direction==="outbound");
     return{
       total:all.length,
       sent:all.filter(m=>m.status==="sent").length,
@@ -307,7 +294,7 @@ export default function MessagesContent(){
       read:all.filter(m=>m.status==="read").length,
       failed:all.filter(m=>m.status==="failed").length,
     };
-  },[]);
+  },[activeMessages]);
 
   const tabs=[
     {id:"conversations",label:"Conversas",count:totalUnread},
@@ -391,7 +378,7 @@ export default function MessagesContent(){
                         <span style={{fontSize:11,color:T.n400,flexShrink:0}}>{timeAgo(c.lastTime)}</span>
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:4,marginTop:3}}>
-                        {c.messages[c.messages.length-1]?.from==="clinic"&&<MsgStatus status={c.status}/>}
+                        {c.status&&<MsgStatus status={c.status}/>}
                         <span style={{fontSize:12,color:c.unread?T.n900:T.n400,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:c.unread?500:400}}>{c.lastMsg}</span>
                       </div>
                     </div>
@@ -628,10 +615,9 @@ export default function MessagesContent(){
       )}
 
       <TemplateModal open={templateModal} onClose={()=>{setTemplateModal(false);setEditTemplate(null)}} template={editTemplate}/>
-      <BroadcastModal open={broadcastModal} onClose={()=>setBroadcastModal(false)} channel={channel}/>
+      <BroadcastModal open={broadcastModal} onClose={()=>setBroadcastModal(false)} channel={channel} patients={rawPatients.map(p=>({id:p.id,name:p.full_name,phone:p.phone,color:COLORS[0]}))}/>
     </div>
   );
 }
 
 /* ═══ MAIN EXPORT ═══ */
-

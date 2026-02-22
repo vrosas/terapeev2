@@ -40,3 +40,6 @@ export const useAppStore = create((set, get) => ({
   setLoading: (key, value) =>
     set((s) => ({ loading: { ...s.loading, [key]: value } })),
 }))
+
+// Dev: expose store for testing
+if (typeof window !== "undefined") window.__appStore = useAppStore

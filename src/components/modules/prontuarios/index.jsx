@@ -1,29 +1,11 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
-import {
-  AlertCircle, AlignLeft, ArrowLeft, ArrowRight, Bell, Bold, BookOpen,
-  Calendar, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronLeft,
-  ChevronRight, ChevronUp, Clock, DollarSign, Download, Edit3, Eye, File,
-  FileBarChart, FileImage, FilePlus, FileText, FileType, FileUp, Filter, Hash,
-  History, Image, Italic, LayoutDashboard, List, ListOrdered, Loader2, Lock,
-  Mail, Maximize2, MessageSquare, Minimize2, MoreHorizontal, Paperclip,
-  PenLine, Plus, Printer, Search, Settings, Share2, ShieldCheck, Stethoscope,
-  Trash2, Underline, Unlock, User, Users, X, XCircle
-} from 'lucide-react'
-import { Area, Bar, BarChart, Line } from 'recharts'
+import { useState, useMemo } from 'react'
+import { Activity, AlertCircle, ArrowLeft, ArrowRight, BookOpen, Calendar, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, Clock, DollarSign, Download, Edit3, Eye, File, FileBarChart, FileImage, FileText, FileType, LayoutDashboard, List, Loader2, Lock, MessageSquare, MoreHorizontal, Paperclip, PenLine, Plus, Printer, Search, ShieldCheck, Stethoscope, Trash2, Upload, User, Users, X } from 'lucide-react'
 import { T } from '@/utils/theme'
-
-
-  LayoutDashboard, Calendar, Users, FileText, MessageSquare, DollarSign,
-  Settings, Search, Bell, ChevronLeft, ChevronRight, User, Clock,
-  CheckCircle2, AlertCircle, X, FileBarChart, Plus, ArrowRight,
-  Loader2, ArrowLeft, Download, Edit3, Trash2, Mail, Eye,
-  Check, Bold, Italic, Underline, List, ListOrdered, AlignLeft,
-  Image, Paperclip, FileUp, File, FilePlus, Lock, Unlock,
-  MoreHorizontal, Filter, ChevronDown, ChevronUp, Maximize2,
-  Minimize2, Printer, Share2, Stethoscope, CalendarDays, PenLine,
-  FileImage, FileType, History, BookOpen, ShieldCheck, Hash, XCircle
+import { Button, Modal, InputField, SelectField, Badge, Card, Avatar, EmptyState, LoadingSpinner, getInitials } from '@/components/ui'
+import { useMedicalRecords, usePatients, useProfessionals } from '@/lib/hooks'
 
 /* ─── Design Tokens ─── */
+
 /* ─── Professionals ─── */
 const PROFS = [
   { id: 1, name: "Dra. Ana Costa", specialty: "Psicologia", crp: "CRP 06/12345", color: "#3F6BFF" },
@@ -86,16 +68,16 @@ function generateRecords(patientName, profName) {
 }
 
 /* ─── Sidebar ─── */
+const NAV = [
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "agenda", label: "Agenda", icon: Calendar },
+  { id: "pacientes", label: "Pacientes", icon: Users },
+  { id: "prontuarios", label: "Prontuários", icon: FileText },
+  { id: "mensagens", label: "Mensagens", icon: MessageSquare },
+  { id: "financeiro", label: "Financeiro", icon: DollarSign },
+  { id: "relatorios", label: "Relatórios", icon: FileBarChart },
+];
 
-/* ─── Badge ─── */
-function Badge({ children, color, bg }) {
-  return (
-    <span style={{
-      display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px",
-      borderRadius: 20, background: bg, color, fontSize: 12, fontWeight: 500, whiteSpace: "nowrap",
-    }}>{children}</span>
-  );
-}
 
 /* ─── File Icon Helper ─── */
 function FileIcon({ type, size = 16 }) {
@@ -180,18 +162,7 @@ function RichTextEditor({ value, onChange, placeholder }) {
         data-placeholder={placeholder}
       />
 
-      <style>{`
-        [contenteditable]:empty:before {
-          content: attr(data-placeholder);
-          color: ${T.n400};
-          pointer-events: none;
-        }
-        [contenteditable] ul, [contenteditable] ol {
-          padding-left: 20px; margin: 8px 0;
-        }
-        [contenteditable] li { margin-bottom: 4px; }
-      `}</style>
-    </div>
+          </div>
   );
 }
 
@@ -681,7 +652,7 @@ function PatientRecordsView({ patient, onBack }) {
 }
 
 /* ═══════════════ RECORDS LIST (main view) ═══════════════ */
-export default function RecordsList() {
+export default function Prontuarios() {
   const [search, setSearch] = useState("");
   const [profFilter, setProfFilter] = useState("all");
   const [selectedPatient, setSelectedPatient] = useState(null);

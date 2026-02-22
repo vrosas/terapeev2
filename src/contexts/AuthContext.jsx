@@ -163,6 +163,13 @@ export function AuthProvider({ children }) {
     toast.success('Modo demonstração ativado')
   }
 
+  // Auto-demo via URL param (?demo=true)
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('demo') === 'true' && !user) {
+      loginDemo()
+    }
+  }, [])
+
   // ─── Clinic Setup (post-signup) ───
 
   const createClinic = async (clinicData) => {

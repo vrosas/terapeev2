@@ -1,38 +1,20 @@
-import { useState, useEffect } from 'react'
-import {
-  Activity, AlertCircle, AlertTriangle, Award, Bell, Briefcase, Calendar,
-  Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
-  Clock, Copy, CreditCard, DollarSign, Download, Edit3, ExternalLink, Eye,
-  EyeOff, FileText, Globe, Hash, Heart, Home, Image, Info, Key, Layers,
-  LayoutDashboard, Link, Loader2, Lock, Mail, MapPin, MessageSquare,
-  MoreHorizontal, Phone, Plus, RefreshCw, Save, Search, Settings, Shield,
-  Smartphone, ToggleLeft, ToggleRight, Trash2, TrendingUp, User, Users, Wifi,
-  X, Zap
-} from 'lucide-react'
-import { Bar } from 'recharts'
+import { useState } from 'react'
+import { AlertCircle, AlertTriangle, Award, Bell, Building2, Calendar, Check, CheckCircle2, ChevronDown, ChevronRight, Clock, Copy, CreditCard, Edit3, ExternalLink, Eye, EyeOff, FileText, Globe, Home, Image, Info, Key, Link, Loader2, Lock, Mail, MessageSquare, MoreHorizontal, Phone, Plus, RefreshCw, Save, Search, Settings, Shield, Smartphone, Star, Trash2, Upload, Users, Wifi, X, Zap } from 'lucide-react'
 import { T } from '@/utils/theme'
-
-
-  LayoutDashboard, Calendar, Users, FileText, MessageSquare, DollarSign,
-  Settings, Search, Bell, ChevronLeft, ChevronRight, Clock,
-  CheckCircle2, AlertCircle, X, Plus, Loader2, Download, Edit3,
-  Check, ChevronDown, ChevronUp, TrendingUp, MoreHorizontal,
-  Mail, Phone, Hash, Award, Briefcase, Activity,
-  Eye, EyeOff, MapPin, Shield, Heart, User, Zap, Home,
-  Lock, Globe, Link, ToggleLeft, ToggleRight, Save,
-  CreditCard, Smartphone, Image, Trash2, Copy, RefreshCw,
-  AlertTriangle, Info, ExternalLink, Key, Layers, Wifi
+import { Button, Modal, InputField, SelectField, Badge, Card, Toggle, Avatar, EmptyState, LoadingSpinner, getInitials } from '@/components/ui'
+import { useAuth } from '@/contexts/AuthContext'
 
 /* ─── Design Tokens ─── */
+
 const IS={width:"100%",padding:"10px 12px",border:`1.5px solid ${T.n300}`,borderRadius:T.radiusMd,fontSize:14,fontFamily:T.font,color:T.n900,outline:"none",boxSizing:"border-box",background:T.n0};
 const LS={display:"block",fontSize:13,fontWeight:500,color:T.n700,marginBottom:5};
 const FW={marginBottom:18};
 
-function getInitials(name){ return name.split(" ").map(w=>w[0]).filter(Boolean).slice(0,2).join("").toUpperCase(); }
 
 /* ─── Data ─── */
 const WEEKDAYS=[{id:"seg",label:"Segunda-feira"},{id:"ter",label:"Terça-feira"},{id:"qua",label:"Quarta-feira"},{id:"qui",label:"Quinta-feira"},{id:"sex",label:"Sexta-feira"},{id:"sab",label:"Sábado"},{id:"dom",label:"Domingo"}];
 
+// TODO: integrar com useProfessionals + tabela de equipe
 const MOCK_TEAM = [
   { id:1, name:"Dr. Rafael Mendes", email:"rafael@terapee.com", role:"admin", status:"active", color:T.primary500, lastLogin:"2025-01-20T14:30:00" },
   { id:2, name:"Dra. Ana Costa", email:"ana.costa@terapee.com", role:"professional", status:"active", color:T.success, lastLogin:"2025-01-20T16:45:00" },
@@ -79,18 +61,8 @@ const INTEGRATIONS = [
 
 /* ═══ Sidebar ═══ */
 
-/* ═══ Shared ═══ */
-function Badge({children,color,bg}){
-  return <span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"4px 10px",borderRadius:20,background:bg,color,fontSize:12,fontWeight:500,whiteSpace:"nowrap"}}>{children}</span>;
-}
 
-function Toggle({value,onChange,disabled}){
-  return(
-    <button onClick={()=>!disabled&&onChange(!value)} style={{width:42,height:24,borderRadius:12,border:"none",cursor:disabled?"not-allowed":"pointer",background:value?T.primary500:T.n300,position:"relative",transition:"background 200ms",flexShrink:0,opacity:disabled?0.5:1}}>
-      <div style={{width:20,height:20,borderRadius:"50%",background:T.n0,position:"absolute",top:2,left:value?20:2,transition:"left 200ms",boxShadow:"0 1px 3px rgba(0,0,0,0.15)"}}/>
-    </button>
-  );
-}
+
 
 function SectionCard({title,desc,icon:Icon,children,delay=0}){
   return(
@@ -196,7 +168,7 @@ function TeamModal({open,onClose,member}){
 }
 
 /* ═══ MAIN CONTENT ═══ */
-export default function SettingsContent(){
+export default function Configuracoes(){
   const[section,setSection]=useState("clinic");
   const[saving,setSaving]=useState(false);
   const[saved,setSaved]=useState(false);
@@ -823,5 +795,3 @@ export default function SettingsContent(){
 }
 
 /* ═══ MAIN EXPORT ═══ */
-
-

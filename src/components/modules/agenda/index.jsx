@@ -1,23 +1,11 @@
-import { useState, useEffect, useMemo } from 'react'
-import {
-  AlertCircle, ArrowLeft, ArrowRight, Ban, Bell, Building2, Calendar, Check,
-  CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock, Command,
-  DollarSign, Eye, FileBarChart, FileText, Filter, LayoutDashboard, Loader2,
-  LogOut, MapPin, MessageSquare, MoreHorizontal, Phone, Plus, RefreshCw,
-  Repeat, Search, Settings, Stethoscope, Timer, User, Users, Video, X, XCircle
-} from 'lucide-react'
-import { Bar, BarChart, Legend, Line } from 'recharts'
+import { useState, useMemo, useCallback } from 'react'
+import { AlertCircle, Ban, Calendar, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock, DollarSign, Edit3, FileBarChart, FileText, LayoutDashboard, Loader2, MapPin, MessageSquare, MoreHorizontal, Phone, Plus, RefreshCw, Repeat, Search, Timer, Trash2, User, Users, Video, X, XCircle } from 'lucide-react'
 import { T } from '@/utils/theme'
-import { Badge } from '@/components/ui'
-
-  LayoutDashboard, Calendar, Users, FileText, MessageSquare, DollarSign,
-  Settings, Search, Bell, ChevronLeft, ChevronRight, LogOut, User,
-  Clock, CheckCircle2, AlertCircle, XCircle, X, Command, FileBarChart,
-  Stethoscope, Building2, RefreshCw, Timer, Check, Video, MapPin,
-  Plus, ChevronDown, Repeat, ArrowRight, ArrowLeft, Loader2, Phone,
-  MoreHorizontal, Filter, Eye, Ban
+import { Button, Modal, InputField, SelectField, Badge, Avatar, EmptyState, LoadingSpinner, getInitials } from '@/components/ui'
+import { useAppointments, usePatients, useProfessionals } from '@/lib/hooks'
 
 /* ─── Design Tokens ─── */
+
 /* ─── Status ─── */
 const STATUS = {
   pendente:      { label: "Pendente",      color: T.warning, bg: "rgba(245,158,11,0.10)", icon: Clock },
@@ -124,25 +112,16 @@ for (let h = 7; h <= 19; h++) {
 }
 
 /* ═══════════════ SIDEBAR (same shell) ═══════════════ */
+const NAV_ITEMS = [
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "agenda", label: "Agenda", icon: Calendar },
+  { id: "pacientes", label: "Pacientes", icon: Users },
+  { id: "prontuarios", label: "Prontuários", icon: FileText },
+  { id: "mensagens", label: "Mensagens", icon: MessageSquare },
+  { id: "financeiro", label: "Financeiro", icon: DollarSign },
+  { id: "relatorios", label: "Relatórios", icon: FileBarChart },
+];
 
-/* ═══════════════ STATUS BADGE ═══════════════ */
-function StatusBadge({ status, small, onClick }) {
-  const s = STATUS[status] || STATUS.pendente;
-  const Icon = s.icon;
-  return (
-    <span onClick={onClick} style={{
-      display: "inline-flex", alignItems: "center", gap: 4,
-      padding: small ? "2px 7px" : "4px 10px",
-      borderRadius: 20, background: s.bg, color: s.color,
-      fontSize: small ? 10 : 12, fontWeight: 500, whiteSpace: "nowrap",
-      cursor: onClick ? "pointer" : "default",
-      transition: "all 150ms",
-    }}>
-      <Icon size={small ? 10 : 12} />
-      {s.label}
-    </span>
-  );
-}
 
 /* ═══════════════ APPOINTMENT CARD (Day view) ═══════════════ */
 function AppointmentBlock({ apt, onClick, slotHeight }) {
@@ -691,7 +670,7 @@ function WeekView({ weekStart, appointments, profFilter, onSlotClick, onAptClick
 }
 
 /* ═══════════════ AGENDA CONTENT ═══════════════ */
-export default function AgendaContent() {
+export default function Agenda() {
   const [view, setView] = useState("day");
   const [currentDate, setCurrentDate] = useState(new Date());
   const [weekStart, setWeekStart] = useState(getMonday(new Date()));
@@ -907,5 +886,3 @@ export default function AgendaContent() {
 }
 
 /* ═══════════════ MAIN EXPORT ═══════════════ */
-
-

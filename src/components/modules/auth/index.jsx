@@ -1,9 +1,5 @@
 import { useState } from 'react'
-import {
-  AlertCircle, ArrowRight, Building2, CalendarDays, Check, ChevronLeft,
-  ChevronRight, Eye, EyeOff, Key, Loader2, Lock, Mail, MessageSquare, Plus,
-  Smartphone, Stethoscope, Trash2
-} from 'lucide-react'
+import { AlertCircle, ArrowRight, Building2, CalendarDays, Check, ChevronLeft, ChevronRight, Eye, EyeOff, Key, Loader2, Lock, Mail, MessageSquare, Plus, Smartphone, Stethoscope, Trash2 } from 'lucide-react'
 import { Area, Line } from 'recharts'
 import { T } from '@/utils/theme'
 import { Toggle } from '@/components/ui'
