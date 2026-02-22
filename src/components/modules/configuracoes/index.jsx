@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { AlertCircle, AlertTriangle, Award, Bell, Building2, Calendar, Check, CheckCircle2, ChevronDown, ChevronRight, Clock, Copy, CreditCard, Edit3, ExternalLink, Eye, EyeOff, FileText, Globe, Home, Image, Info, Key, Link, Loader2, Lock, Mail, MessageSquare, MoreHorizontal, Phone, Plus, RefreshCw, Save, Search, Settings, Shield, Smartphone, Star, Trash2, Upload, Users, Wifi, X, Zap } from 'lucide-react'
 import { T } from '@/utils/theme'
 import { Button, Modal, InputField, SelectField, Badge, Card, Toggle, Avatar, EmptyState, LoadingSpinner, getInitials } from '@/components/ui'
 import { useAuth } from '@/contexts/AuthContext'
+import { useProfessionals } from '@/lib/hooks'
 
 /* ─── Design Tokens ─── */
 
@@ -14,16 +15,6 @@ const FW={marginBottom:18};
 /* ─── Data ─── */
 const WEEKDAYS=[{id:"seg",label:"Segunda-feira"},{id:"ter",label:"Terça-feira"},{id:"qua",label:"Quarta-feira"},{id:"qui",label:"Quinta-feira"},{id:"sex",label:"Sexta-feira"},{id:"sab",label:"Sábado"},{id:"dom",label:"Domingo"}];
 
-// TODO: integrar com useProfessionals + tabela de equipe
-const MOCK_TEAM = [
-  { id:1, name:"Dr. Rafael Mendes", email:"rafael@terapee.com", role:"admin", status:"active", color:T.primary500, lastLogin:"2025-01-20T14:30:00" },
-  { id:2, name:"Dra. Ana Costa", email:"ana.costa@terapee.com", role:"professional", status:"active", color:T.success, lastLogin:"2025-01-20T16:45:00" },
-  { id:3, name:"Dr. Carlos Lima", email:"carlos.lima@terapee.com", role:"professional", status:"active", color:T.warning, lastLogin:"2025-01-19T09:20:00" },
-  { id:4, name:"Dra. Beatriz Rocha", email:"beatriz.rocha@terapee.com", role:"professional", status:"active", color:T.purple, lastLogin:"2025-01-20T11:00:00" },
-  { id:5, name:"Juliana Ferreira", email:"juliana@terapee.com", role:"receptionist", status:"active", color:T.teal, lastLogin:"2025-01-20T08:00:00" },
-  { id:6, name:"Marcos Santos", email:"marcos@terapee.com", role:"financial", status:"active", color:T.orange, lastLogin:"2025-01-18T17:30:00" },
-  { id:7, name:"Dra. Patrícia Mendes", email:"patricia@terapee.com", role:"professional", status:"inactive", color:T.pink, lastLogin:"2024-12-15T10:00:00" },
-];
 
 const ROLES = {
   admin:        { label:"Administrador", color:T.primary500, desc:"Acesso total ao sistema" },
@@ -169,6 +160,20 @@ function TeamModal({open,onClose,member}){
 
 /* ═══ MAIN CONTENT ═══ */
 export default function Configuracoes(){
+  /* ─── Hooks ─── */
+  const { data: rawProfessionals } = useProfessionals();
+
+  /* ─── Adapt professionals → team members ─── */
+  const ROLE_COLORS = { admin: T.primary500, professional: T.success, receptionist: T.teal, financial: T.orange, owner: T.purple };
+  const team = useMemo(() => rawProfessionals.map(p => ({
+    id: p.id,
+    name: p.full_name,
+    email: p.email || "",
+    role: "professional",
+    status: p.is_active ? "active" : "inactive",
+    color: ROLE_COLORS["professional"],
+    lastLogin: p.updated_at || p.created_at || "",
+  })), [rawProfessionals]);
   const[section,setSection]=useState("clinic");
   const[saving,setSaving]=useState(false);
   const[saved,setSaved]=useState(false);
@@ -652,7 +657,7 @@ export default function Configuracoes(){
               {/* Roles summary */}
               <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:20}}>
                 {Object.entries(ROLES).map(([id,r],i)=>{
-                  const count=MOCK_TEAM.filter(m=>m.role===id&&m.status==="active").length;
+                  const count=team.filter(m=>m.role===id&&m.status==="active").length;
                   return(
                     <div key={id} style={{background:T.n0,borderRadius:T.radiusMd,border:`1px solid ${T.n200}`,padding:"14px 16px",animation:`fadeSlideUp 0.3s ease ${i*0.04}s both`}}>
                       <div style={{fontSize:22,fontWeight:700,color:r.color}}>{count}</div>
@@ -664,7 +669,7 @@ export default function Configuracoes(){
 
               {/* Team list */}
               <div style={{background:T.n0,borderRadius:T.radiusLg,border:`1px solid ${T.n200}`,boxShadow:T.shadowSoft,overflow:"hidden"}}>
-                {MOCK_TEAM.map((m,i)=>{
+                {team.map((m,i)=>{
                   const role=ROLES[m.role];
                   const lastLogin=new Date(m.lastLogin);
                   return(

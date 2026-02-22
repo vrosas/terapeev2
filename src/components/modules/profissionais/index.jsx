@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { Activity, AlertCircle, Award, BookOpen, Briefcase, Calendar, Check, CheckCircle2, ChevronDown, ChevronUp, Clock, DollarSign, Download, Edit3, Eye, EyeOff, Hash, Heart, Home, Loader2, Mail, MapPin, MoreHorizontal, Phone, Plus, Search, Shield, Star, Trash2, TrendingUp, User, Users, Wrench, X, Zap } from 'lucide-react'
 import { T } from '@/utils/theme'
 import { Button, Modal, InputField, SelectField, Badge, Card, Avatar, EmptyState, LoadingSpinner, getInitials } from '@/components/ui'
-import { useProfessionals } from '@/lib/hooks'
+import { useProfessionals, useServices } from '@/lib/hooks'
 
 /* ─── Design Tokens ─── */
 
@@ -28,21 +28,6 @@ const professionals = [
 ];
 
 /* ─── Mock Services ─── */
-// TODO: criar tabela services no Supabase
-const MOCK_SERVICES = [
-  { id:1, name:"Psicoterapia Individual", category:"psicologia", duration:50, price:180, description:"Sessão individual de psicoterapia com abordagem personalizada.", professionals:[1,5], status:"active", color:T.primary500 },
-  { id:2, name:"Terapia de Casal", category:"psicologia", duration:80, price:280, description:"Sessão de terapia voltada para casais e dinâmicas relacionais.", professionals:[1], status:"active", color:T.primary500 },
-  { id:3, name:"Avaliação Psicológica", category:"psicologia", duration:90, price:350, description:"Avaliação psicológica completa com laudos e devolutiva.", professionals:[1], status:"active", color:T.primary500 },
-  { id:4, name:"Fisioterapia Geral", category:"fisioterapia", duration:50, price:150, description:"Sessão de fisioterapia para reabilitação e tratamento de dor.", professionals:[2], status:"active", color:T.success },
-  { id:5, name:"Fisioterapia Esportiva", category:"fisioterapia", duration:60, price:180, description:"Fisioterapia especializada para atletas e praticantes de esportes.", professionals:[2], status:"active", color:T.success },
-  { id:6, name:"RPG — Reeducação Postural", category:"fisioterapia", duration:60, price:170, description:"Reeducação postural global para correção e alinhamento.", professionals:[2], status:"active", color:T.success },
-  { id:7, name:"Fonoaudiologia Infantil", category:"fono", duration:40, price:130, description:"Terapia fonoaudiológica especializada para crianças.", professionals:[3], status:"active", color:T.warning },
-  { id:8, name:"Avaliação Audiológica", category:"fono", duration:60, price:200, description:"Avaliação completa da audição com exames audiométricos.", professionals:[3], status:"active", color:T.warning },
-  { id:9, name:"Terapia Ocupacional", category:"to", duration:50, price:160, description:"Sessão de terapia ocupacional para reabilitação funcional.", professionals:[4], status:"active", color:T.purple },
-  { id:10, name:"Avaliação Neuropsicológica", category:"neuro", duration:120, price:450, description:"Avaliação neuropsicológica com bateria de testes cognitivos.", professionals:[5], status:"active", color:T.teal },
-  { id:11, name:"Reabilitação Cognitiva", category:"neuro", duration:50, price:200, description:"Programa de estimulação e reabilitação das funções cognitivas.", professionals:[5], status:"active", color:T.teal },
-  { id:12, name:"Psicoterapia Infantil", category:"pediatria", duration:45, price:170, description:"Psicoterapia lúdica e especializada para crianças.", professionals:[6], status:"inactive", color:T.pink },
-];
 
 const WEEKDAYS = [{id:"seg",label:"Seg"},{id:"ter",label:"Ter"},{id:"qua",label:"Qua"},{id:"qui",label:"Qui"},{id:"sex",label:"Sex"},{id:"sab",label:"Sáb"},{id:"dom",label:"Dom"}];
 const TIME_SLOTS = ["07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00"];
@@ -194,7 +179,7 @@ function ProfessionalModal({open,onClose,professional}){
             <div>
               <div style={{fontSize:13,color:T.n400,marginBottom:16}}>Selecione os serviços que este profissional pode realizar:</div>
               <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                {MOCK_SERVICES.filter(s=>s.status==="active").map(svc=>{
+                {services.filter(s=>s.status==="active").map(svc=>{
                   const sel=selectedServices.includes(svc.name);
                   return(
                     <div key={svc.id} onClick={()=>toggleService(svc.name)} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",borderRadius:T.radiusMd,border:`1.5px solid ${sel?T.primary500:T.n300}`,background:sel?T.primary50:T.n0,cursor:"pointer",transition:"all 200ms"}}>
@@ -338,7 +323,7 @@ function ProfessionalDetail({professional,onClose,onEdit}){
   if(!professional) return null;
   const spec=SPECIALTIES.find(s=>s.id===professional.specialty);
   const SpecIcon=spec?.icon||User;
-  const profServices=MOCK_SERVICES.filter(s=>s.professionals.includes(professional.id));
+  const profServices=services.filter(s=>s.professionals.includes(professional.id));
   const totalSlots=Object.values(professional.availability).flat().length;
   const activeDays=WEEKDAYS.filter(d=>(professional.availability[d.id]||[]).length>0);
 
@@ -440,7 +425,7 @@ export default function Profissionais(){
     return ms&&msp&&mst;
   }),[search,specFilter,statusFilter]);
 
-  const filteredSvcs=useMemo(()=>MOCK_SERVICES.filter(s=>{
+  const filteredSvcs=useMemo(()=>services.filter(s=>{
     const ms=!search||s.name.toLowerCase().includes(search.toLowerCase());
     const msp=specFilter==="all"||s.category===specFilter;
     const mst=statusFilter==="all"||s.status===statusFilter;
@@ -448,11 +433,11 @@ export default function Profissionais(){
   }),[search,specFilter,statusFilter]);
 
   const totalActive=professionals.filter(p=>p.status==="active").length;
-  const totalServices=MOCK_SERVICES.filter(s=>s.status==="active").length;
+  const totalServices=services.filter(s=>s.status==="active").length;
   const totalPatients=professionals.reduce((s,p)=>s+p.patients,0);
   const totalAppts=professionals.reduce((s,p)=>s+p.monthlyAppts,0);
 
-  const mainTabs=[{id:"professionals",label:"Profissionais",icon:Award,count:professionals.length},{id:"services",label:"Catálogo de serviços",icon:Briefcase,count:MOCK_SERVICES.length}];
+  const mainTabs=[{id:"professionals",label:"Profissionais",icon:Award,count:professionals.length},{id:"services",label:"Catálogo de serviços",icon:Briefcase,count:services.length}];
 
   const handleEditProf=(p)=>{setEditProf(p);setProfModal(true)};
 
@@ -544,7 +529,7 @@ export default function Profissionais(){
           {filteredProfs.map((p,i)=>{
             const spec=SPECIALTIES.find(s=>s.id===p.specialty);
             const SpecIcon=spec?.icon||User;
-            const profServices=MOCK_SERVICES.filter(s=>s.professionals.includes(p.id));
+            const profServices=services.filter(s=>s.professionals.includes(p.id));
             const totalSlots=Object.values(p.availability).flat().length;
             return(
               <div key={p.id} onClick={()=>setDetailProf(p)} style={{background:T.n0,borderRadius:T.radiusLg,border:`1px solid ${T.n200}`,boxShadow:T.shadowSoft,overflow:"hidden",cursor:"pointer",transition:"all 200ms",animation:`fadeSlideUp 0.3s ease ${i*0.04}s both`,opacity:p.status==="inactive"?0.6:1}}

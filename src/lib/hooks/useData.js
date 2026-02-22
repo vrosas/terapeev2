@@ -132,3 +132,28 @@ export function useNotifications(options = {}) {
     ...options,
   })
 }
+
+// ═══ SERVICES (Catálogo) ═══
+export function useServices(options = {}) {
+  return useSupabaseTable('services', {
+    select: `
+      *,
+      service_professionals(
+        professional:professionals(id, full_name, color)
+      )
+    `,
+    orderBy: { column: 'name', ascending: true },
+    demoData: DEMO.services,
+    ...options,
+  })
+}
+
+// ═══ SUPPLIERS (Fornecedores) ═══
+export function useSuppliers(options = {}) {
+  return useSupabaseTable('suppliers', {
+    select: '*, category:expense_categories(id, name, icon, color)',
+    orderBy: { column: 'name', ascending: true },
+    demoData: DEMO.suppliers,
+    ...options,
+  })
+}

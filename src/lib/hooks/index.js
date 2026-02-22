@@ -11,4 +11,6 @@ export {
   useMessages,
   useMessageTemplates,
   useNotifications,
+  useServices,
+  useSuppliers,
 } from './useData'

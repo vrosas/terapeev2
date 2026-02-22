@@ -121,4 +121,27 @@ export const DEMO = {
     { id: 'notif-5', type: 'financial', title: 'Cobrança vencida', description: 'Fatura de Juliana Mendes venceu há 5 dias', target_module: 'financeiro', is_read: true, created_at: new Date(Date.now() - 2 * 3600000).toISOString() },
     { id: 'notif-6', type: 'system', title: 'WhatsApp conectado', description: 'Instância UAZAPI reconectada com sucesso', target_module: 'configuracoes', is_read: true, created_at: new Date(Date.now() - 3 * 3600000).toISOString() },
   ],
+
+  // ─── Services (Catálogo) ───
+  services: [
+    { id: 'svc-1', name: 'Psicoterapia Individual', category: 'psicologia', description: 'Sessão individual de psicoterapia com abordagem personalizada.', duration: 50, price: 280, color: '#3F6BFF', is_active: true, service_professionals: [{ professional: { id: 'prof-1', full_name: 'Dra. Renata Oliveira', color: '#3F6BFF' } }] },
+    { id: 'svc-2', name: 'Terapia de Casal', category: 'psicologia', description: 'Sessão de terapia voltada para casais e dinâmicas relacionais.', duration: 80, price: 400, color: '#3F6BFF', is_active: true, service_professionals: [{ professional: { id: 'prof-2', full_name: 'Dr. Marcos Silva', color: '#9333EA' } }] },
+    { id: 'svc-3', name: 'Avaliação Psicológica', category: 'psicologia', description: 'Avaliação psicológica completa com laudos e devolutiva.', duration: 90, price: 350, color: '#3F6BFF', is_active: true, service_professionals: [{ professional: { id: 'prof-1', full_name: 'Dra. Renata Oliveira', color: '#3F6BFF' } }] },
+    { id: 'svc-4', name: 'Psicoterapia Infantil', category: 'pediatria', description: 'Psicoterapia lúdica especializada para crianças.', duration: 45, price: 250, color: '#EC4899', is_active: true, service_professionals: [{ professional: { id: 'prof-3', full_name: 'Dra. Camila Santos', color: '#EC4899' } }] },
+    { id: 'svc-5', name: 'Ludoterapia', category: 'pediatria', description: 'Terapia através do brincar para crianças.', duration: 45, price: 250, color: '#EC4899', is_active: true, service_professionals: [{ professional: { id: 'prof-3', full_name: 'Dra. Camila Santos', color: '#EC4899' } }] },
+    { id: 'svc-6', name: 'Psicanálise', category: 'psicologia', description: 'Sessão de psicanálise com escuta livre.', duration: 50, price: 320, color: '#9333EA', is_active: true, service_professionals: [{ professional: { id: 'prof-2', full_name: 'Dr. Marcos Silva', color: '#9333EA' } }] },
+    { id: 'svc-7', name: 'Avaliação Neuropsicológica', category: 'neuropsicologia', description: 'Avaliação neuropsicológica com bateria de testes cognitivos.', duration: 120, price: 450, color: '#F97316', is_active: true, service_professionals: [{ professional: { id: 'prof-4', full_name: 'Dr. André Costa', color: '#F97316' } }] },
+    { id: 'svc-8', name: 'Reabilitação Cognitiva', category: 'neuropsicologia', description: 'Programa de estimulação e reabilitação das funções cognitivas.', duration: 50, price: 200, color: '#F97316', is_active: true, service_professionals: [{ professional: { id: 'prof-4', full_name: 'Dr. André Costa', color: '#F97316' } }] },
+    { id: 'svc-9', name: 'Orientação de Pais', category: 'pediatria', description: 'Sessão de orientação para pais sobre desenvolvimento infantil.', duration: 50, price: 180, color: '#EC4899', is_active: true, service_professionals: [{ professional: { id: 'prof-3', full_name: 'Dra. Camila Santos', color: '#EC4899' } }] },
+  ],
+
+  // ─── Suppliers (Fornecedores) ───
+  suppliers: [
+    { id: 'sup-1', name: 'Imobiliária Central SP', cnpj: '11.222.333/0001-44', phone: '(11) 3333-4444', email: 'contato@centralsp.com.br', category: { id: 'ecat-1', name: 'Aluguel', icon: 'Building2', color: '#3F6BFF' }, notes: 'Contrato de aluguel anual — sala 1234', is_active: true },
+    { id: 'sup-2', name: 'Enel Distribuição SP', cnpj: '15.253.184/0001-50', phone: '0800-7272-120', email: null, category: { id: 'ecat-2', name: 'Energia', icon: 'Zap', color: '#F59E0B' }, notes: 'UC 0045672890', is_active: true },
+    { id: 'sup-3', name: 'Vivo Fibra', cnpj: '02.558.157/0001-62', phone: '(11) 10315', email: 'empresas@vivo.com.br', category: { id: 'ecat-3', name: 'Internet', icon: 'Wifi', color: '#9333EA' }, notes: 'Plano 500Mbps empresarial', is_active: true },
+    { id: 'sup-4', name: 'Kalunga', cnpj: '43.283.811/0001-50', phone: '(11) 3232-3232', email: 'vendas@kalunga.com.br', category: { id: 'ecat-4', name: 'Material de escritório', icon: 'Package', color: '#F97316' }, notes: null, is_active: true },
+    { id: 'sup-5', name: 'Google Ads', cnpj: '06.990.590/0001-23', phone: null, email: 'ads-support@google.com', category: { id: 'ecat-6', name: 'Marketing', icon: 'Star', color: '#EC4899' }, notes: 'Campanha mensal "Psicólogo São Paulo"', is_active: true },
+    { id: 'sup-6', name: 'Limpeza Express', cnpj: '22.333.444/0001-55', phone: '(11) 94444-5555', email: null, category: null, notes: 'Serviço de limpeza 3x por semana', is_active: true },
+  ],
 }
