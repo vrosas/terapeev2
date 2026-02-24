@@ -1,9 +1,10 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { AlertCircle, AlertTriangle, Award, Bell, Building2, Calendar, Check, CheckCircle2, ChevronDown, ChevronRight, Clock, Copy, CreditCard, Edit3, ExternalLink, Eye, EyeOff, FileText, Globe, Home, Image, Info, Key, Link, Loader2, Lock, Mail, MessageSquare, MoreHorizontal, Phone, Plus, RefreshCw, Save, Search, Settings, Shield, Smartphone, Star, Trash2, Upload, Users, Wifi, X, Zap } from 'lucide-react'
 import { T } from '@/utils/theme'
 import { Button, Modal, InputField, SelectField, Badge, Card, Toggle, Avatar, EmptyState, LoadingSpinner, getInitials } from '@/components/ui'
 import { useAuth } from '@/contexts/AuthContext'
 import { useProfessionals } from '@/lib/hooks'
+import { supabase } from '@/lib/supabase'
 
 /* ─── Design Tokens ─── */
 
@@ -90,7 +91,15 @@ function TeamModal({open,onClose,member}){
     else if(open) setForm({name:"",email:"",role:"professional",status:"active"});
   },[open,member]);
   const upd=(k,v)=>setForm(f=>({...f,[k]:v}));
-  const save=()=>{setSaving(true);setTimeout(()=>{setSaving(false);onClose("saved")},1000)};
+  const save=async()=>{
+    if(!form.name.trim()||!form.email.trim()) return;
+    setSaving(true);
+    if(supabase&&isEdit&&member?.id){
+      await supabase.from('profiles').update({full_name:form.name,role:form.role,is_active:form.status==="active"}).eq('id',member.id);
+    }
+    setSaving(false);
+    onClose("saved");
+  };
   if(!open) return null;
   const role=ROLES[form.role];
   const perms=ROLE_PERMS[form.role]||[];
@@ -161,6 +170,7 @@ function TeamModal({open,onClose,member}){
 /* ═══ MAIN CONTENT ═══ */
 export default function Configuracoes(){
   /* ─── Hooks ─── */
+  const { clinicId } = useAuth();
   const { data: rawProfessionals } = useProfessionals();
 
   /* ─── Adapt professionals → team members ─── */
@@ -189,9 +199,30 @@ export default function Configuracoes(){
 
   // Clinic form
   const[clinic,setClinic]=useState({
-    name:"Clínica Terapee",cnpj:"12.345.678/0001-01",phone:"(11) 3333-4444",email:"contato@terapee.com.br",
-    address:"Rua Augusta, 500 — Consolação, São Paulo — SP, 01304-000",website:"www.terapee.com.br",
+    name:"",cnpj:"",phone:"",email:"",address:"",website:"",
   });
+
+  // Load clinic data from Supabase on mount
+  useEffect(()=>{
+    if(!supabase||!clinicId) return;
+    supabase.from('clinics').select('*').eq('id',clinicId).single().then(({data})=>{
+      if(!data) return;
+      const addr=typeof data.address==='object'&&data.address
+        ?[data.address.street,data.address.city,data.address.state].filter(Boolean).join(', ')
+        :(data.address||'');
+      setClinic({
+        name:data.name||'',
+        cnpj:data.cnpj||'',
+        phone:data.phone||'',
+        email:data.email||'',
+        address:addr,
+        website:data.settings?.website||'',
+      });
+      if(data.working_hours&&typeof data.working_hours==='object'){
+        setHours(h=>({...h,...data.working_hours}));
+      }
+    });
+  },[clinicId]);
 
   // Business hours
   const[hours,setHours]=useState({
@@ -218,7 +249,19 @@ export default function Configuracoes(){
     overduePayment:true, dailySummary:true, weeklyReport:false,
   });
 
-  const handleSave=()=>{setSaving(true);setTimeout(()=>{setSaving(false);setSaved(true);setTimeout(()=>setSaved(false),2000)},1200)};
+  const handleSave=async()=>{
+    setSaving(true);
+    if(supabase&&clinicId){
+      await supabase.from('clinics').update({
+        name:clinic.name,cnpj:clinic.cnpj,phone:clinic.phone,email:clinic.email,
+        working_hours:hours,
+        settings:{website:clinic.website,policies},
+      }).eq('id',clinicId);
+    }
+    setSaving(false);
+    setSaved(true);
+    setTimeout(()=>setSaved(false),2000);
+  };
 
   const sections=[
     {id:"clinic",label:"Dados da clínica",icon:Home},

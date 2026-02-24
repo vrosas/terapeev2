@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { AlertCircle, AlertTriangle, Archive, ArrowLeft, Bot, Check, CheckCheck, ChevronDown, Clock, Copy, DollarSign, Download, Edit3, ExternalLink, Eye, FileText, Filter, Globe, Hash, Heart, Image, Loader2, MessageSquare, Mic, MoreVertical, Paperclip, Phone, Plus, RefreshCw, Search, Send, Settings, Smartphone, Smile, Star, Template, Trash2, User, Users, Video, X, Zap } from 'lucide-react'
 import { T } from '@/utils/theme'
 import { Button, Modal, InputField, Badge, Avatar, EmptyState, LoadingSpinner, getInitials } from '@/components/ui'
-import { useConversations, useMessages, useMessageTemplates, usePatients } from '@/lib/hooks'
+import { useConversations, useMessages, useMessageTemplates, usePatients, useProfessionals } from '@/lib/hooks'
 
 /* ─── Design Tokens ─── */
 
@@ -54,16 +54,24 @@ function MsgStatus({status}){
 }
 
 /* ═══ Template Modal ═══ */
-function TemplateModal({open,onClose,template}){
+function TemplateModal({open,onClose,template,onCreate,onUpdate}){
   const isEdit=!!template;
   const[form,setForm]=useState({name:"",category:"reminder",body:"",active:true});
   const[saving,setSaving]=useState(false);
   useEffect(()=>{
-    if(open&&template) setForm({name:template.name,category:template.category,body:template.body,active:template.active});
+    if(open&&template) setForm({name:template.name,category:template.category,body:template.body||template.content,active:template.active??template.is_active??true});
     else if(open) setForm({name:"",category:"reminder",body:"Olá {{nome}}!\n\n",active:true});
   },[open,template]);
   const upd=(k,v)=>setForm(f=>({...f,[k]:v}));
-  const save=()=>{setSaving(true);setTimeout(()=>{setSaving(false);onClose("saved")},1000)};
+  const save=async()=>{
+    if(!form.name.trim()||!form.body.trim()) return;
+    setSaving(true);
+    const vars=(form.body.match(/\{\{(\w+)\}\}/g)||[]).map(v=>v.replace(/[{}]/g,""));
+    const payload={name:form.name,category:form.category,content:form.body,variables:[...new Set(vars)],is_active:form.active};
+    const{error}=isEdit?await(onUpdate?.(template.id,payload)??Promise.resolve({})):await(onCreate?.(payload)??Promise.resolve({}));
+    setSaving(false);
+    if(!error) onClose("saved");
+  };
   if(!open) return null;
   const vars=(form.body.match(/\{\{(\w+)\}\}/g)||[]).map(v=>v.replace(/[{}]/g,""));
   return(
@@ -130,7 +138,7 @@ function TemplateModal({open,onClose,template}){
 
 /* ═══ Broadcast Modal ═══ */
 const COLORS = [T.primary500, T.success, T.warning, T.purple, T.teal, T.pink, T.info];
-function BroadcastModal({open,onClose,channel="uazapi",patients=[]}){
+function BroadcastModal({open,onClose,channel="uazapi",patients=[],templates=[]}){
   const[step,setStep]=useState(1);
   const[selectedTemplate,setSelectedTemplate]=useState(null);
   const[selectedPatients,setSelectedPatients]=useState([]);
@@ -159,7 +167,7 @@ function BroadcastModal({open,onClose,channel="uazapi",patients=[]}){
             <div>
               <div style={{fontSize:14,fontWeight:600,marginBottom:12}}>Selecione um template</div>
               <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                {TEMPLATES.filter(t=>t.active).map(t=>{
+                {(templates.length>0?templates:TEMPLATES).filter(t=>t.active||t.is_active).map(t=>{
                   const sel=selectedTemplate?.id===t.id;
                   const Icon=t.icon;
                   return(
@@ -235,6 +243,14 @@ export default function Mensagens(){
   /* ─── Hooks ─── */
   const { data: rawConversations } = useConversations();
   const { data: rawPatients } = usePatients();
+  const { data: rawTemplates, create: createTemplate, update: updateTemplate } = useMessageTemplates();
+
+  /* ─── Map templates to UI shape (content → body, is_active → active) ─── */
+  const TEMPLATES_DATA = useMemo(() => rawTemplates.map(t => ({
+    ...t, body: t.content, active: t.is_active,
+    icon: TEMPLATE_CATS.find(c=>c.id===t.category)?.icon ?? Clock,
+    color: TEMPLATE_CATS.find(c=>c.id===t.category)?.color ?? T.primary500,
+  })), [rawTemplates]);
 
   const[tab,setTab]=useState("conversations");
   const[search,setSearch]=useState("");
@@ -267,7 +283,7 @@ export default function Mensagens(){
   const isMax=channel==="uazapi";
 
   const filteredConvs=useMemo(()=>conversations.filter(c=>!search||c.patient.toLowerCase().includes(search.toLowerCase())||c.phone.includes(search)),[search,conversations]);
-  const filteredTemplates=useMemo(()=>TEMPLATES.filter(t=>templateCat==="all"||t.category===templateCat),[templateCat]);
+  const filteredTemplates=useMemo(()=>TEMPLATES_DATA.filter(t=>templateCat==="all"||t.category===templateCat),[TEMPLATES_DATA,templateCat]);
   const totalUnread=useMemo(()=>conversations.reduce((a,c)=>a+c.unread,0),[conversations]);
 
   // Active conversation with adapted messages
@@ -298,7 +314,7 @@ export default function Mensagens(){
 
   const tabs=[
     {id:"conversations",label:"Conversas",count:totalUnread},
-    {id:"templates",label:"Templates",count:TEMPLATES.length},
+    {id:"templates",label:"Templates",count:TEMPLATES_DATA.length},
     {id:"analytics",label:"Métricas"},
   ];
 
@@ -614,8 +630,8 @@ export default function Mensagens(){
         </div>
       )}
 
-      <TemplateModal open={templateModal} onClose={()=>{setTemplateModal(false);setEditTemplate(null)}} template={editTemplate}/>
-      <BroadcastModal open={broadcastModal} onClose={()=>setBroadcastModal(false)} channel={channel} patients={rawPatients.map(p=>({id:p.id,name:p.full_name,phone:p.phone,color:COLORS[0]}))}/>
+      <TemplateModal open={templateModal} onClose={()=>{setTemplateModal(false);setEditTemplate(null)}} template={editTemplate} onCreate={createTemplate} onUpdate={updateTemplate}/>
+      <BroadcastModal open={broadcastModal} onClose={()=>setBroadcastModal(false)} channel={channel} patients={rawPatients.map(p=>({id:p.id,name:p.full_name,phone:p.phone,color:COLORS[0]}))} templates={TEMPLATES_DATA}/>
     </div>
   );
 }

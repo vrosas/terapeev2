@@ -155,6 +155,27 @@ export function AuthProvider({ children }) {
     return { error: null }
   }
 
+  const signInWithGoogle = async () => {
+    if (!supabase) {
+      setUser(DEMO_USER)
+      setProfile(DEMO_PROFILE)
+      setIsDemo(true)
+      return { error: null }
+    }
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin },
+    })
+
+    if (error) {
+      toast.error(error.message)
+      return { error }
+    }
+
+    return { error: null }
+  }
+
   // Demo login (for dev mode)
   const loginDemo = () => {
     setUser(DEMO_USER)
@@ -214,6 +235,7 @@ export function AuthProvider({ children }) {
     signUp,
     signIn,
     signOut,
+    signInWithGoogle,
     resetPassword,
     loginDemo,
     createClinic,

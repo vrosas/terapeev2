@@ -1,8 +1,8 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { AlertCircle, Ban, Calendar, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock, DollarSign, Edit3, FileBarChart, FileText, LayoutDashboard, Loader2, MapPin, MessageSquare, MoreHorizontal, Phone, Plus, RefreshCw, Repeat, Search, Timer, Trash2, User, Users, Video, X, XCircle } from 'lucide-react'
 import { T } from '@/utils/theme'
 import { Button, Modal, InputField, SelectField, Badge, Avatar, EmptyState, LoadingSpinner, getInitials } from '@/components/ui'
-import { useAppointments, usePatients, useProfessionals } from '@/lib/hooks'
+import { useAppointments, usePatients, useProfessionals, useServices } from '@/lib/hooks'
 
 /* ─── Design Tokens ─── */
 
@@ -172,9 +172,9 @@ function AppointmentBlock({ apt, onClick, slotHeight }) {
 }
 
 /* ═══════════════ APPOINTMENT CREATION / DETAIL MODAL ═══════════════ */
-function AppointmentModal({ open, onClose, appointment, selectedSlot, appointments }) {
+function AppointmentModal({ open, onClose, appointment, selectedSlot, appointments, patients=[], professionals=[], services=[], onCreate, onUpdate }) {
   const [form, setForm] = useState({
-    patient: "", professional: "", service: "", type: "presencial",
+    patient: "", patient_id: "", professional: "", service: "", type: "presencial",
     date: "", time: "", recurrence: "none", recurrenceEnd: "",
   });
   const [patientSearch, setPatientSearch] = useState("");
@@ -211,10 +211,10 @@ function AppointmentModal({ open, onClose, appointment, selectedSlot, appointmen
   }, [appointment, selectedSlot, open]);
 
   const filteredPatients = patientSearch.length > 0
-    ? PATIENTS.filter(p => p.toLowerCase().includes(patientSearch.toLowerCase()))
-    : PATIENTS;
+    ? patients.filter(p => p.full_name.toLowerCase().includes(patientSearch.toLowerCase()))
+    : patients;
 
-  const handleSave = () => {
+  const handleSave = async () => {
     // Check conflict
     if (form.professional && form.date && form.time) {
       const existing = appointments?.find(a =>
@@ -229,7 +229,24 @@ function AppointmentModal({ open, onClose, appointment, selectedSlot, appointmen
       }
     }
     setSaving(true);
-    setTimeout(() => { setSaving(false); onClose("saved"); }, 1000);
+    const selectedService = services.find(s => String(s.id) === form.service);
+    const durationMin = selectedService?.duration || 50;
+    const startTime = form.date && form.time ? new Date(`${form.date}T${form.time}`).toISOString() : null;
+    const endTime = startTime ? new Date(new Date(startTime).getTime() + durationMin * 60000).toISOString() : null;
+    const payload = {
+      patient_id: form.patient_id || null,
+      professional_id: form.professional || null,
+      service_id: form.service || null,
+      start_time: startTime,
+      end_time: endTime,
+      modality: form.type === "online" ? "online" : "in_person",
+      status: "scheduled",
+    };
+    const { error } = isNew
+      ? await (onCreate?.(payload) ?? Promise.resolve({}))
+      : await (onUpdate?.(appointment.id, payload) ?? Promise.resolve({}));
+    setSaving(false);
+    if (!error) onClose("saved");
   };
 
   if (!open) return null;
@@ -319,7 +336,7 @@ function AppointmentModal({ open, onClose, appointment, selectedSlot, appointmen
                 {filteredPatients.length === 0 ? (
                   <div style={{ padding: "12px 14px", fontSize: 13, color: T.n400 }}>Nenhum paciente encontrado</div>
                 ) : filteredPatients.slice(0, 6).map((p, i) => (
-                  <button key={i} onMouseDown={() => { setPatientSearch(p); setForm(f => ({ ...f, patient: p })); setShowPatientList(false); }}
+                  <button key={p.id ?? i} onMouseDown={() => { setPatientSearch(p.full_name); setForm(f => ({ ...f, patient: p.full_name, patient_id: p.id })); setShowPatientList(false); }}
                     style={{
                       width: "100%", padding: "10px 14px", border: "none", background: "transparent",
                       cursor: "pointer", fontFamily: T.font, fontSize: 13, color: T.n900, textAlign: "left",
@@ -327,7 +344,7 @@ function AppointmentModal({ open, onClose, appointment, selectedSlot, appointmen
                     }}
                     onMouseEnter={e => e.currentTarget.style.background = T.n100}
                     onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                    <Users size={14} color={T.n400} /> {p}
+                    <Users size={14} color={T.n400} /> {p.full_name}
                   </button>
                 ))}
               </div>
@@ -341,7 +358,7 @@ function AppointmentModal({ open, onClose, appointment, selectedSlot, appointmen
               <select value={form.professional} onChange={e => setForm(f => ({ ...f, professional: e.target.value }))}
                 style={{ ...inputStyle, cursor: "pointer", appearance: "auto" }}>
                 <option value="">Selecionar...</option>
-                {PROFESSIONALS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                {professionals.map(p => <option key={p.id} value={p.id}>{p.name||p.full_name}</option>)}
               </select>
             </div>
             <div style={fieldWrap}>
@@ -349,7 +366,7 @@ function AppointmentModal({ open, onClose, appointment, selectedSlot, appointmen
               <select value={form.service} onChange={e => setForm(f => ({ ...f, service: e.target.value }))}
                 style={{ ...inputStyle, cursor: "pointer", appearance: "auto" }}>
                 <option value="">Selecionar...</option>
-                {SERVICES.map(sv => <option key={sv.id} value={sv.id}>{sv.name} ({sv.duration}min)</option>)}
+                {services.map(sv => <option key={sv.id} value={sv.id}>{sv.name} ({sv.duration||sv.duration_minutes||50}min)</option>)}
               </select>
             </div>
           </div>
@@ -669,8 +686,54 @@ function WeekView({ weekStart, appointments, profFilter, onSlotClick, onAptClick
   );
 }
 
+/* ─── Status mapping from DB enum to UI keys ─── */
+const DB_STATUS_MAP = {
+  scheduled: "pendente", confirmed: "confirmado", in_progress: "confirmado",
+  completed: "realizado", cancelled: "cancelado", no_show: "sem_resposta", rescheduled: "reagendar",
+};
+
 /* ═══════════════ AGENDA CONTENT ═══════════════ */
 export default function Agenda() {
+  /* ─── Hooks ─── */
+  const { data: rawAppointments, create: createAppointment, update: updateAppointment } = useAppointments();
+  const { data: rawPatients } = usePatients();
+  const { data: rawProfessionals } = useProfessionals();
+  const { data: rawServices } = useServices();
+
+  /* ─── Adapt hook data → UI shape ─── */
+  const appointments = useMemo(() => rawAppointments.map(a => {
+    const start = a.start_time ? new Date(a.start_time) : null;
+    return {
+      id: a.id,
+      date: start ? start.toISOString().split("T")[0] : "",
+      time: start ? `${String(start.getHours()).padStart(2,"0")}:${String(start.getMinutes()).padStart(2,"0")}` : "",
+      hour: start ? start.getHours() : 0,
+      minutes: start ? start.getMinutes() : 0,
+      patient: a.patient?.full_name ?? "",
+      patient_id: a.patient_id,
+      professional: {
+        id: a.professional_id,
+        name: a.professional?.full_name ?? "",
+        short: (a.professional?.full_name ?? "").split(" ")[0],
+        color: a.professional?.color ?? T.primary500,
+      },
+      service: { id: a.service_id ?? "", name: "", duration: a.professional?.session_duration ?? 50 },
+      type: a.modality === "online" ? "online" : "presencial",
+      status: DB_STATUS_MAP[a.status] ?? "pendente",
+      duration: a.professional?.session_duration ?? 50,
+    };
+  }), [rawAppointments]);
+
+  const profList = useMemo(() => rawProfessionals.map(p => ({
+    id: p.id, name: p.full_name, short: (p.full_name||"").split(" ")[0], color: p.color || T.primary500,
+  })), [rawProfessionals]);
+
+  const svcList = useMemo(() => rawServices.map(s => ({
+    id: s.id, name: s.name, duration: s.duration_minutes || 50, price: s.price || 0,
+  })), [rawServices]);
+
+  const patientList = useMemo(() => rawPatients, [rawPatients]);
+
   const [view, setView] = useState("day");
   const [currentDate, setCurrentDate] = useState(new Date());
   const [weekStart, setWeekStart] = useState(getMonday(new Date()));
@@ -678,8 +741,6 @@ export default function Agenda() {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedApt, setSelectedApt] = useState(null);
   const [selectedSlot, setSelectedSlot] = useState(null);
-
-  const appointments = useMemo(() => generateAppointments(weekStart), [weekStart.toISOString()]);
 
   const goToday = () => {
     const today = new Date();
@@ -797,7 +858,7 @@ export default function Agenda() {
                 cursor: "pointer", appearance: "auto", outline: "none",
               }}>
               <option value="all">Todos os profissionais</option>
-              {PROFESSIONALS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              {profList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
 
@@ -837,7 +898,7 @@ export default function Agenda() {
 
           {/* Legend */}
           <div style={{ marginLeft: "auto", display: "flex", gap: 12, alignItems: "center" }}>
-            {PROFESSIONALS.filter(p => profFilter === "all" || p.id === Number(profFilter)).map(p => (
+            {profList.filter(p => profFilter === "all" || String(p.id) === String(profFilter)).map(p => (
               <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: T.n400 }}>
                 <div style={{ width: 10, height: 10, borderRadius: 3, background: p.color }} />
                 {p.short}
@@ -880,6 +941,11 @@ export default function Agenda() {
         appointment={selectedApt}
         selectedSlot={selectedSlot}
         appointments={appointments}
+        patients={patientList}
+        professionals={profList}
+        services={svcList}
+        onCreate={createAppointment}
+        onUpdate={updateAppointment}
       />
     </div>
   );

@@ -7,73 +7,7 @@ import {
 } from 'recharts'
 import { T } from '@/utils/theme'
 import { Button, getInitials } from '@/components/ui'
-
-/* ─── Mock Data (replace with Supabase aggregation views) ─── */
-const MONTHS_DATA = [
-  { month: 'Ago', receita: 22500, despesa: 8200, lucro: 14300, atendimentos: 142, novos: 8, cancelamentos: 6, noShow: 3 },
-  { month: 'Set', receita: 19800, despesa: 7800, lucro: 12000, atendimentos: 128, novos: 5, cancelamentos: 8, noShow: 5 },
-  { month: 'Out', receita: 25100, despesa: 9100, lucro: 16000, atendimentos: 158, novos: 12, cancelamentos: 5, noShow: 2 },
-  { month: 'Nov', receita: 23400, despesa: 8600, lucro: 14800, atendimentos: 148, novos: 9, cancelamentos: 7, noShow: 4 },
-  { month: 'Dez', receita: 28700, despesa: 10200, lucro: 18500, atendimentos: 172, novos: 14, cancelamentos: 4, noShow: 1 },
-  { month: 'Jan', receita: 26200, despesa: 9400, lucro: 16800, atendimentos: 165, novos: 11, cancelamentos: 6, noShow: 3 },
-]
-
-const BY_PROFESSIONAL = [
-  { name: 'Dra. Renata Oliveira', atendimentos: 68, receita: 12400, pacientes: 34, ocupacao: 85, color: T.primary500 },
-  { name: 'Dr. Marcos Silva', atendimentos: 92, receita: 14800, pacientes: 28, ocupacao: 92, color: T.success },
-  { name: 'Dra. Camila Santos', atendimentos: 55, receita: 8200, pacientes: 22, ocupacao: 72, color: T.warning },
-  { name: 'Dr. André Costa', atendimentos: 42, receita: 6800, pacientes: 18, ocupacao: 65, color: '#9333EA' },
-]
-
-const BY_SERVICE = [
-  { name: 'Psicoterapia Individual', qtd: 98, receita: 17640, color: T.primary500 },
-  { name: 'Terapia de Casal', qtd: 72, receita: 10800, color: T.success },
-  { name: 'Psicologia Infantil', qtd: 38, receita: 4940, color: T.warning },
-  { name: 'Neuropsicologia', qtd: 28, receita: 4480, color: '#9333EA' },
-  { name: 'Avaliação Psicológica', qtd: 12, receita: 5400, color: '#0D9488' },
-]
-
-const BY_PAYMENT = [
-  { name: 'Pix', value: 35, color: '#0D9488' },
-  { name: 'Cartão Crédito', value: 25, color: T.primary500 },
-  { name: 'Convênio', value: 22, color: T.success },
-  { name: 'Dinheiro', value: 10, color: T.warning },
-  { name: 'Transferência', value: 8, color: '#9333EA' },
-]
-
-const BY_STATUS = [
-  { name: 'Realizados', value: 165, color: T.success },
-  { name: 'Cancelados', value: 6, color: T.error },
-  { name: 'No-show', value: 3, color: T.warning },
-  { name: 'Reagendados', value: 8, color: T.info },
-]
-
-const WEEKLY_HEATMAP = [
-  { day: 'Seg', h7: 3, h8: 8, h9: 12, h10: 14, h11: 13, h14: 11, h15: 10, h16: 8, h17: 5 },
-  { day: 'Ter', h7: 2, h8: 7, h9: 11, h10: 13, h11: 12, h14: 10, h15: 9, h16: 7, h17: 4 },
-  { day: 'Qua', h7: 1, h8: 5, h9: 8, h10: 9, h11: 8, h14: 7, h15: 6, h16: 5, h17: 3 },
-  { day: 'Qui', h7: 3, h8: 8, h9: 12, h10: 14, h11: 12, h14: 11, h15: 10, h16: 8, h17: 5 },
-  { day: 'Sex', h7: 2, h8: 6, h9: 10, h10: 11, h11: 10, h14: 8, h15: 7, h16: 5, h17: 3 },
-  { day: 'Sáb', h7: 0, h8: 4, h9: 7, h10: 8, h11: 6, h14: 0, h15: 0, h16: 0, h17: 0 },
-]
-
-const EXPENSE_CATS = [
-  { name: 'Aluguel', value: 4500, color: T.primary500 },
-  { name: 'Folha / Comissões', value: 2100, color: T.success },
-  { name: 'Energia / Água', value: 860, color: T.warning },
-  { name: 'Marketing', value: 600, color: T.error },
-  { name: 'Software', value: 446, color: '#9333EA' },
-  { name: 'Outros', value: 894, color: T.n400 },
-]
-
-const PATIENT_FLOW = [
-  { month: 'Ago', novos: 8, ativos: 112, inativos: 5 },
-  { month: 'Set', novos: 5, ativos: 115, inativos: 2 },
-  { month: 'Out', novos: 12, ativos: 124, inativos: 3 },
-  { month: 'Nov', novos: 9, ativos: 128, inativos: 5 },
-  { month: 'Dez', novos: 14, ativos: 137, inativos: 5 },
-  { month: 'Jan', novos: 11, ativos: 143, inativos: 5 },
-]
+import { useAppointments, usePatients, useProfessionals, useServices, useCharges, useExpenses, useExpenseCategories } from '@/lib/hooks'
 
 /* ─── Shared Components ─── */
 function KPI({ label, value, sub, trend, trendUp, icon: Icon, color, delay = 0 }) {
@@ -134,10 +68,10 @@ function CTT({ active, payload, label }) {
 }
 
 /* ─── Heatmap ─── */
-function Heatmap() {
+function Heatmap({ data = [] }) {
   const hours = ['07:00', '08:00', '09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '17:00']
   const keys = ['h7', 'h8', 'h9', 'h10', 'h11', 'h14', 'h15', 'h16', 'h17']
-  const maxVal = 14
+  const maxVal = Math.max(1, ...data.flatMap(row => keys.map(k => row[k] || 0)))
   const getColor = (v) => {
     if (v === 0) return T.n200
     const pct = v / maxVal
@@ -152,10 +86,10 @@ function Heatmap() {
       <div style={{ display: 'grid', gridTemplateColumns: '50px repeat(9,1fr)', gap: 3, minWidth: 450 }}>
         <div />
         {hours.map((h) => <div key={h} style={{ textAlign: 'center', fontSize: 11, color: T.n400, padding: '4px 0', fontFamily: 'monospace' }}>{h}</div>)}
-        {WEEKLY_HEATMAP.map((row) => (
+        {data.map((row) => (
           <>{[null, ...keys].map((k, i) => {
             if (i === 0) return <div key={row.day} style={{ fontSize: 12, color: T.n700, fontWeight: 500, display: 'flex', alignItems: 'center' }}>{row.day}</div>
-            const v = row[k]
+            const v = row[k] || 0
             return <div key={`${row.day}-${k}`} title={`${v} atendimentos`} style={{ height: 32, borderRadius: 4, background: getColor(v), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 600, color: v > 7 ? T.n0 : v > 0 ? T.primary600 : 'transparent', cursor: 'default' }}>{v > 0 ? v : ''}</div>
           })}</>
         ))}
@@ -176,19 +110,181 @@ export default function Relatorios() {
   const [tab, setTab] = useState('overview')
   const [period, setPeriod] = useState('6m')
 
+  const { data: appointments = [] } = useAppointments()
+  const { data: patients = [] } = usePatients()
+  const { data: professionals = [] } = useProfessionals()
+  const { data: services = [] } = useServices()
+  const { data: charges = [] } = useCharges()
+  const { data: expenses = [] } = useExpenses()
+  const { data: expenseCategories = [] } = useExpenseCategories()
+
+  const MONTHS_DATA = useMemo(() => {
+    const now = new Date()
+    const months = []
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      const monthLabel = d.toLocaleDateString('pt-BR', { month: 'short' })
+      const monthCharges = charges.filter(c => c.status === 'paid' && (c.due_date || '').startsWith(monthKey))
+      const monthExpenses = expenses.filter(e => (e.date || '').startsWith(monthKey))
+      const monthAppointments = appointments.filter(a => (a.start_time || '').startsWith(monthKey))
+      const novos = patients.filter(p => (p.created_at || '').startsWith(monthKey)).length
+      const receita = monthCharges.reduce((sum, c) => sum + (c.amount || 0), 0)
+      const despesa = monthExpenses.reduce((sum, e) => sum + (e.amount || 0), 0)
+      months.push({
+        month: monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1),
+        receita,
+        despesa,
+        lucro: receita - despesa,
+        atendimentos: monthAppointments.length,
+        novos,
+        cancelamentos: monthAppointments.filter(a => a.status === 'cancelled').length,
+        noShow: monthAppointments.filter(a => a.status === 'no_show').length,
+      })
+    }
+    return months
+  }, [appointments, patients, charges, expenses])
+
+  const PROF_COLORS = [T.primary500, T.success, T.warning, '#9333EA', T.info, '#0D9488']
+
+  const BY_PROFESSIONAL = useMemo(() => {
+    const profMap = {}
+    appointments.forEach(a => {
+      if (!a.professional_id) return
+      if (!profMap[a.professional_id]) profMap[a.professional_id] = { total: 0, completed: 0, patientIds: new Set() }
+      profMap[a.professional_id].total++
+      if (a.status === 'completed') profMap[a.professional_id].completed++
+      if (a.patient_id) profMap[a.professional_id].patientIds.add(a.patient_id)
+    })
+    return Object.entries(profMap).map(([profId, d], idx) => {
+      const prof = professionals.find(p => p.id === profId)
+      return {
+        name: prof?.full_name || 'Desconhecido',
+        atendimentos: d.completed,
+        receita: 0,
+        pacientes: d.patientIds.size,
+        ocupacao: d.total > 0 ? Math.min(100, Math.round((d.completed / d.total) * 100)) : 0,
+        color: PROF_COLORS[idx % PROF_COLORS.length],
+      }
+    }).sort((a, b) => b.atendimentos - a.atendimentos)
+  }, [appointments, professionals])
+
+  const BY_SERVICE = useMemo(() => {
+    const colors = [T.primary500, T.success, T.warning, '#9333EA', '#0D9488']
+    const svcMap = {}
+    appointments.forEach(a => {
+      if (!a.service_id) return
+      if (!svcMap[a.service_id]) svcMap[a.service_id] = 0
+      svcMap[a.service_id]++
+    })
+    return Object.entries(svcMap).map(([svcId, qtd], idx) => {
+      const svc = services.find(s => s.id === svcId)
+      const pricePerSession = svc?.price_per_session || 0
+      return {
+        name: svc?.name || 'Serviço',
+        qtd,
+        receita: qtd * pricePerSession,
+        color: colors[idx % colors.length],
+      }
+    }).sort((a, b) => b.qtd - a.qtd)
+  }, [appointments, services])
+
+  const BY_PAYMENT = useMemo(() => {
+    const METHOD_LABELS = { pix: 'Pix', credit_card: 'Cartão Crédito', insurance: 'Convênio', cash: 'Dinheiro', bank_transfer: 'Transferência' }
+    const METHOD_COLORS = { pix: '#0D9488', credit_card: T.primary500, insurance: T.success, cash: T.warning, bank_transfer: '#9333EA' }
+    const paidCharges = charges.filter(c => c.status === 'paid')
+    const total = paidCharges.length || 1
+    const payMap = {}
+    paidCharges.forEach(c => {
+      const method = c.payment_method || 'other'
+      payMap[method] = (payMap[method] || 0) + 1
+    })
+    return Object.entries(payMap).map(([method, count]) => ({
+      name: METHOD_LABELS[method] || method,
+      value: Math.round((count / total) * 100),
+      color: METHOD_COLORS[method] || T.n400,
+    })).sort((a, b) => b.value - a.value)
+  }, [charges])
+
+  const BY_STATUS = useMemo(() => {
+    const STATUS_META = {
+      completed: { name: 'Realizados', color: T.success },
+      cancelled: { name: 'Cancelados', color: T.error },
+      no_show: { name: 'No-show', color: T.warning },
+      rescheduled: { name: 'Reagendados', color: T.info },
+    }
+    const counts = {}
+    appointments.forEach(a => {
+      if (STATUS_META[a.status]) counts[a.status] = (counts[a.status] || 0) + 1
+    })
+    return Object.entries(STATUS_META)
+      .map(([key, meta]) => ({ name: meta.name, value: counts[key] || 0, color: meta.color }))
+      .filter(s => s.value > 0)
+  }, [appointments])
+
+  const WEEKLY_HEATMAP = useMemo(() => {
+    const DAY_LABELS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+    const HOUR_KEYS = [7, 8, 9, 10, 11, 14, 15, 16, 17]
+    const heatmap = DAY_LABELS.map(day => ({ day, ...Object.fromEntries(HOUR_KEYS.map(h => [`h${h}`, 0])) }))
+    appointments.forEach(a => {
+      if (!a.start_time) return
+      const dt = new Date(a.start_time)
+      const dayIdx = dt.getDay()
+      const hour = dt.getHours()
+      const key = `h${hour}`
+      if (heatmap[dayIdx] && key in heatmap[dayIdx]) heatmap[dayIdx][key]++
+    })
+    return [1, 2, 3, 4, 5, 6].map(d => heatmap[d])
+  }, [appointments])
+
+  const EXPENSE_CATS = useMemo(() => {
+    const colors = [T.primary500, T.success, T.warning, T.error, '#9333EA', T.n400]
+    const catMap = {}
+    expenses.forEach(e => {
+      const cat = expenseCategories.find(c => c.id === e.category_id)
+      const catName = cat?.name || 'Outros'
+      catMap[catName] = (catMap[catName] || 0) + (e.amount || 0)
+    })
+    return Object.entries(catMap)
+      .map(([name, value], idx) => ({ name, value, color: colors[idx % colors.length] }))
+      .sort((a, b) => b.value - a.value)
+  }, [expenses, expenseCategories])
+
+  const PATIENT_FLOW = useMemo(() => {
+    const now = new Date()
+    const activeCount = patients.filter(p => p.status === 'active' || !p.status).length
+    const inactiveCount = patients.filter(p => p.status === 'inactive').length
+    const months = []
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      const monthLabel = d.toLocaleDateString('pt-BR', { month: 'short' })
+      const novos = patients.filter(p => (p.created_at || '').startsWith(monthKey)).length
+      months.push({
+        month: monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1),
+        novos,
+        ativos: activeCount,
+        inativos: inactiveCount,
+      })
+    }
+    return months
+  }, [patients])
+
   const totals = useMemo(() => {
-    const r = MONTHS_DATA.reduce((a, m) => a + m.receita, 0)
-    const d = MONTHS_DATA.reduce((a, m) => a + m.despesa, 0)
-    const at = MONTHS_DATA.reduce((a, m) => a + m.atendimentos, 0)
-    const nv = MONTHS_DATA.reduce((a, m) => a + m.novos, 0)
-    const cn = MONTHS_DATA.reduce((a, m) => a + m.cancelamentos, 0)
-    const ns = MONTHS_DATA.reduce((a, m) => a + m.noShow, 0)
-    const last = MONTHS_DATA[MONTHS_DATA.length - 1]
-    const prev = MONTHS_DATA[MONTHS_DATA.length - 2]
+    const data = MONTHS_DATA
+    const r = data.reduce((a, m) => a + m.receita, 0)
+    const d = data.reduce((a, m) => a + m.despesa, 0)
+    const at = data.reduce((a, m) => a + m.atendimentos, 0)
+    const nv = data.reduce((a, m) => a + m.novos, 0)
+    const cn = data.reduce((a, m) => a + m.cancelamentos, 0)
+    const ns = data.reduce((a, m) => a + m.noShow, 0)
+    const last = data[data.length - 1] || { receita: 0, atendimentos: 0 }
+    const prev = data[data.length - 2] || { receita: 0, atendimentos: 0 }
     const recTrend = prev.receita ? Math.round(((last.receita - prev.receita) / prev.receita) * 100) : 0
     const attTrend = prev.atendimentos ? Math.round(((last.atendimentos - prev.atendimentos) / prev.atendimentos) * 100) : 0
-    return { receita: r, despesa: d, lucro: r - d, atendimentos: at, novos: nv, cancelamentos: cn, noShow: ns, recTrend, attTrend, ticketMedio: Math.round(r / at), ocupacaoMedia: Math.round(BY_PROFESSIONAL.reduce((a, p) => a + p.ocupacao, 0) / BY_PROFESSIONAL.length) }
-  }, [])
+    const ocupacaoMedia = BY_PROFESSIONAL.length ? Math.round(BY_PROFESSIONAL.reduce((a, p) => a + p.ocupacao, 0) / BY_PROFESSIONAL.length) : 0
+    return { receita: r, despesa: d, lucro: r - d, atendimentos: at, novos: nv, cancelamentos: cn, noShow: ns, recTrend, attTrend, ticketMedio: at > 0 ? Math.round(r / at) : 0, ocupacaoMedia }
+  }, [MONTHS_DATA, BY_PROFESSIONAL])
 
   const tabs = [
     { id: 'overview', label: 'Visão geral' },
@@ -307,7 +403,7 @@ export default function Relatorios() {
             </ChartCard>
 
             <ChartCard title="Mapa de calor — Horários de pico" subtitle="Atendimentos por dia/hora" delay={0.25}>
-              <Heatmap />
+              <Heatmap data={WEEKLY_HEATMAP} />
             </ChartCard>
           </div>
         </div>
@@ -319,7 +415,7 @@ export default function Relatorios() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 22 }}>
             <KPI icon={TrendingUp} label="Receita bruta" value={`R$ ${(totals.receita / 1000).toFixed(1)}k`} trend={`${totals.recTrend > 0 ? '+' : ''}${totals.recTrend}%`} trendUp={totals.recTrend > 0} color={T.success} delay={0.05} />
             <KPI icon={TrendingDown} label="Despesas totais" value={`R$ ${(totals.despesa / 1000).toFixed(1)}k`} color={T.error} delay={0.1} />
-            <KPI icon={DollarSign} label="Lucro líquido" value={`R$ ${(totals.lucro / 1000).toFixed(1)}k`} trend={`+${Math.round(((totals.lucro / totals.receita) * 100))}% margem`} trendUp color={T.primary500} delay={0.15} />
+            <KPI icon={DollarSign} label="Lucro líquido" value={`R$ ${(totals.lucro / 1000).toFixed(1)}k`} trend={`+${Math.round(((totals.lucro / Math.max(1, totals.receita)) * 100))}% margem`} trendUp color={T.primary500} delay={0.15} />
             <KPI icon={CreditCard} label="Ticket médio" value={`R$ ${totals.ticketMedio}`} color={T.warning} delay={0.2} />
           </div>
 
@@ -341,7 +437,7 @@ export default function Relatorios() {
             <ChartCard title="Despesas por categoria" subtitle="Mês atual" delay={0.15}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {EXPENSE_CATS.map((c, i) => {
-                  const pct = Math.round((c.value / EXPENSE_CATS.reduce((a, x) => a + x.value, 0)) * 100)
+                  const pct = Math.round((c.value / Math.max(1, EXPENSE_CATS.reduce((a, x) => a + x.value, 0))) * 100)
                   return (
                     <div key={i}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
@@ -433,17 +529,13 @@ export default function Relatorios() {
                       <div style={{ fontSize: 16, fontWeight: 700 }}>{p.atendimentos}</div>
                       <div style={{ fontSize: 11, color: T.n400 }}>atend.</div>
                     </div>
-                    <div style={{ textAlign: 'right', minWidth: 80 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: T.success }}>R$ {p.receita.toLocaleString('pt-BR')}</div>
-                      <div style={{ fontSize: 11, color: T.n400 }}>receita</div>
-                    </div>
                   </div>
                 ))}
               </div>
             </ChartCard>
 
             <ChartCard title="Mapa de calor" subtitle="Picos de atendimento por horário" delay={0.25}>
-              <Heatmap />
+              <Heatmap data={WEEKLY_HEATMAP} />
             </ChartCard>
           </div>
         </div>
@@ -453,9 +545,9 @@ export default function Relatorios() {
       {tab === 'patients' && (
         <div style={{ animation: 'fadeSlideUp 0.3s ease both' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 22 }}>
-            <KPI icon={Users} label="Pacientes ativos" value={143} trend="+4.4%" trendUp color={T.primary500} delay={0.05} />
+            <KPI icon={Users} label="Pacientes ativos" value={patients.filter(p => p.status === 'active' || !p.status).length} trend="+4.4%" trendUp color={T.primary500} delay={0.05} />
             <KPI icon={Plus} label="Novos no período" value={totals.novos} color={T.success} delay={0.1} />
-            <KPI icon={TrendingDown} label="Inativos" value={25} color={T.n400} delay={0.15} />
+            <KPI icon={TrendingDown} label="Inativos" value={patients.filter(p => p.status === 'inactive').length} color={T.n400} delay={0.15} />
             <KPI icon={Star} label="Taxa de retenção" value="92%" trend="+2%" trendUp color={T.warning} delay={0.2} />
           </div>
 
@@ -493,7 +585,7 @@ export default function Relatorios() {
             <ChartCard title="Serviços mais procurados" subtitle="Por quantidade de atendimentos" delay={0.2}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {[...BY_SERVICE].sort((a, b) => b.qtd - a.qtd).slice(0, 6).map((s, i) => {
-                  const maxQtd = BY_SERVICE[0].qtd
+                  const maxQtd = Math.max(1, BY_SERVICE[0]?.qtd || 1)
                   return (
                     <div key={i}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
