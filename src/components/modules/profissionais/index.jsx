@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Activity, AlertCircle, Award, BookOpen, Briefcase, Calendar, Check, CheckCircle2, ChevronDown, ChevronUp, Clock, DollarSign, Download, Edit3, Eye, EyeOff, Hash, Heart, Home, Loader2, Mail, MapPin, MoreHorizontal, Phone, Plus, Search, Shield, Star, Trash2, TrendingUp, User, Users, Wrench, X, Zap } from 'lucide-react'
 import { T } from '@/utils/theme'
 import { Button, Modal, InputField, SelectField, Badge, Card, Avatar, EmptyState, LoadingSpinner, getInitials } from '@/components/ui'
@@ -94,7 +94,7 @@ function AvailabilityGrid({value,onChange,readOnly}){
 }
 
 /* ═══ Professional Modal ═══ */
-function ProfessionalModal({open,onClose,professional}){
+function ProfessionalModal({open,onClose,professional,services=[],onCreate,onUpdate}){
   const isEdit=!!professional;
   const[tab,setTab]=useState("info");
   const[form,setForm]=useState({name:"",email:"",phone:"",specialty:"",regNumber:"",bio:"",commission:"60",status:"active"});
@@ -118,7 +118,14 @@ function ProfessionalModal({open,onClose,professional}){
 
   const upd=(k,v)=>setForm(f=>({...f,[k]:v}));
   const toggleService=s=>{setSelectedServices(prev=>prev.includes(s)?prev.filter(x=>x!==s):[...prev,s])};
-  const save=()=>{setSaving(true);setTimeout(()=>{setSaving(false);onClose("saved")},1000)};
+  const save=async()=>{
+    if(!form.name.trim()) return;
+    setSaving(true);
+    const payload={full_name:form.name,email:form.email,phone:form.phone,specialties:form.specialty?[form.specialty]:[],crp:form.regNumber,bio:form.bio,commission_percent:parseFloat(form.commission)||60,is_active:form.status==="active",working_hours:availability};
+    const{error}=isEdit?await(onUpdate?.(professional.id,payload)??Promise.resolve({})):await(onCreate?.(payload)??Promise.resolve({}));
+    setSaving(false);
+    if(!error) onClose("saved");
+  };
   if(!open) return null;
 
   const spec=SPECIALTIES.find(s=>s.id===form.specialty);
@@ -225,7 +232,7 @@ function ProfessionalModal({open,onClose,professional}){
 }
 
 /* ═══ Service Modal ═══ */
-function ServiceModal({open,onClose,service}){
+function ServiceModal({open,onClose,service,professionals=[],onCreate,onUpdate}){
   const isEdit=!!service;
   const[form,setForm]=useState({name:"",category:"",duration:"50",price:"",description:"",status:"active"});
   const[selectedProfs,setSelectedProfs]=useState([]);
@@ -243,7 +250,14 @@ function ServiceModal({open,onClose,service}){
 
   const upd=(k,v)=>setForm(f=>({...f,[k]:v}));
   const toggleProf=id=>setSelectedProfs(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);
-  const save=()=>{setSaving(true);setTimeout(()=>{setSaving(false);onClose("saved")},1000)};
+  const save=async()=>{
+    if(!form.name.trim()) return;
+    setSaving(true);
+    const payload={name:form.name,category:form.category,duration_minutes:parseInt(form.duration)||50,price:parseFloat(form.price)||0,description:form.description,is_active:form.status==="active"};
+    const{error}=isEdit?await(onUpdate?.(service.id,payload)??Promise.resolve({})):await(onCreate?.(payload)??Promise.resolve({}));
+    setSaving(false);
+    if(!error) onClose("saved");
+  };
   if(!open) return null;
 
   return(
@@ -319,11 +333,11 @@ function ServiceModal({open,onClose,service}){
 }
 
 /* ═══ Professional Detail Modal ═══ */
-function ProfessionalDetail({professional,onClose,onEdit}){
+function ProfessionalDetail({professional,onClose,onEdit,services=[]}){
   if(!professional) return null;
   const spec=SPECIALTIES.find(s=>s.id===professional.specialty);
   const SpecIcon=spec?.icon||User;
-  const profServices=services.filter(s=>s.professionals.includes(professional.id));
+  const profServices=services.filter(s=>(s.professionals||[]).includes(professional.id));
   const totalSlots=Object.values(professional.availability).flat().length;
   const activeDays=WEEKDAYS.filter(d=>(professional.availability[d.id]||[]).length>0);
 
@@ -408,6 +422,29 @@ function ProfessionalDetail({professional,onClose,onEdit}){
 
 /* ═══ MAIN CONTENT ═══ */
 export default function Profissionais(){
+  /* ─── Hooks ─── */
+  const { data: rawProfessionals, create: createProfessional, update: updateProfessional } = useProfessionals();
+  const { data: rawServices, create: createService, update: updateService } = useServices();
+
+  /* ─── Adapt hook data → UI shape ─── */
+  const profList = useMemo(()=>rawProfessionals.map(p=>({
+    id:p.id, name:p.full_name||'', email:p.email||'', phone:p.phone||'',
+    specialty:(p.specialties||[])[0]||'', regNumber:p.crp||'',
+    color:p.color||T.primary500, status:p.is_active?"active":"inactive",
+    bio:p.bio||'', commission:p.commission_percent||60,
+    patients:0, monthlyAppts:0,
+    availability:p.working_hours||{seg:[],ter:[],qua:[],qui:[],sex:[],sab:[],dom:[]},
+    services:[],
+  })),[rawProfessionals]);
+
+  const svcList = useMemo(()=>rawServices.map(s=>({
+    id:s.id, name:s.name||'', category:s.category||'',
+    duration:s.duration_minutes||50, price:s.price||0,
+    description:s.description||'', status:s.is_active?"active":"inactive",
+    color:s.color||T.primary500,
+    professionals:(s.service_professionals||[]).map(sp=>sp.professional?.id).filter(Boolean),
+  })),[rawServices]);
+
   const[tab,setTab]=useState("professionals");
   const[search,setSearch]=useState("");
   const[specFilter,setSpecFilter]=useState("all");
@@ -418,26 +455,26 @@ export default function Profissionais(){
   const[svcModal,setSvcModal]=useState(false);
   const[editSvc,setEditSvc]=useState(null);
 
-  const filteredProfs=useMemo(()=>professionals.filter(p=>{
+  const filteredProfs=useMemo(()=>profList.filter(p=>{
     const ms=!search||p.name.toLowerCase().includes(search.toLowerCase())||p.regNumber.toLowerCase().includes(search.toLowerCase());
     const msp=specFilter==="all"||p.specialty===specFilter;
     const mst=statusFilter==="all"||p.status===statusFilter;
     return ms&&msp&&mst;
-  }),[search,specFilter,statusFilter]);
+  }),[profList,search,specFilter,statusFilter]);
 
-  const filteredSvcs=useMemo(()=>services.filter(s=>{
+  const filteredSvcs=useMemo(()=>svcList.filter(s=>{
     const ms=!search||s.name.toLowerCase().includes(search.toLowerCase());
     const msp=specFilter==="all"||s.category===specFilter;
     const mst=statusFilter==="all"||s.status===statusFilter;
     return ms&&msp&&mst;
-  }),[search,specFilter,statusFilter]);
+  }),[svcList,search,specFilter,statusFilter]);
 
-  const totalActive=professionals.filter(p=>p.status==="active").length;
-  const totalServices=services.filter(s=>s.status==="active").length;
-  const totalPatients=professionals.reduce((s,p)=>s+p.patients,0);
-  const totalAppts=professionals.reduce((s,p)=>s+p.monthlyAppts,0);
+  const totalActive=profList.filter(p=>p.status==="active").length;
+  const totalServices=svcList.filter(s=>s.status==="active").length;
+  const totalPatients=profList.reduce((s,p)=>s+p.patients,0);
+  const totalAppts=profList.reduce((s,p)=>s+p.monthlyAppts,0);
 
-  const mainTabs=[{id:"professionals",label:"Profissionais",icon:Award,count:professionals.length},{id:"services",label:"Catálogo de serviços",icon:Briefcase,count:services.length}];
+  const mainTabs=[{id:"professionals",label:"Profissionais",icon:Award,count:profList.length},{id:"services",label:"Catálogo de serviços",icon:Briefcase,count:svcList.length}];
 
   const handleEditProf=(p)=>{setEditProf(p);setProfModal(true)};
 
@@ -628,9 +665,9 @@ export default function Profissionais(){
         </div>
       )}
 
-      <ProfessionalModal open={profModal} onClose={()=>{setProfModal(false);setEditProf(null)}} professional={editProf}/>
-      <ServiceModal open={svcModal} onClose={()=>{setSvcModal(false);setEditSvc(null)}} service={editSvc}/>
-      <ProfessionalDetail professional={detailProf} onClose={()=>setDetailProf(null)} onEdit={handleEditProf}/>
+      <ProfessionalModal open={profModal} onClose={()=>{setProfModal(false);setEditProf(null)}} professional={editProf} services={svcList} onCreate={createProfessional} onUpdate={updateProfessional}/>
+      <ServiceModal open={svcModal} onClose={()=>{setSvcModal(false);setEditSvc(null)}} service={editSvc} professionals={profList} onCreate={createService} onUpdate={updateService}/>
+      <ProfessionalDetail professional={detailProf} onClose={()=>setDetailProf(null)} onEdit={handleEditProf} services={svcList}/>
     </div>
   );
 }
