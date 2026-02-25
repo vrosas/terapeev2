@@ -235,7 +235,7 @@ function FileUploadArea({ files, onAdd, onRemove }) {
 }
 
 /* ═══════════════ NEW RECORD MODAL ═══════════════ */
-function NewRecordModal({ open, onClose, patient }) {
+function NewRecordModal({ open, onClose, patient, onCreate }) {
   const [evolution, setEvolution] = useState("");
   const [files, setFiles] = useState([]);
   const [saving, setSaving] = useState(false);
@@ -245,9 +245,22 @@ function NewRecordModal({ open, onClose, patient }) {
     if (open) { setEvolution(""); setFiles([]); setSaving(false); setSigning(false); }
   }, [open]);
 
-  const handleSave = (sign = false) => {
+  const handleSave = async (sign = false) => {
+    if (!evolution.trim()) return;
     if (sign) setSigning(true); else setSaving(true);
-    setTimeout(() => { setSaving(false); setSigning(false); onClose("saved"); }, 1200);
+    if (onCreate) {
+      const payload = {
+        date: new Date().toISOString().split('T')[0],
+        content: evolution,
+        patient_id: patient?.id || null,
+        professional_id: patient?.professional?.id || null,
+        is_signed: sign,
+      };
+      await onCreate(payload);
+    }
+    setSaving(false);
+    setSigning(false);
+    onClose("saved");
   };
 
   if (!open) return null;
@@ -486,7 +499,7 @@ function RecordDetailView({ record, onBack }) {
 }
 
 /* ═══════════════ PATIENT RECORDS TIMELINE ═══════════════ */
-function PatientRecordsView({ patient, onBack }) {
+function PatientRecordsView({ patient, onBack, onCreate }) {
   const records = useMemo(() => generateRecords(patient.name, patient.professional.name), [patient.id]);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -646,13 +659,14 @@ function PatientRecordsView({ patient, onBack }) {
         ))}
       </div>
 
-      <NewRecordModal open={modalOpen} onClose={() => setModalOpen(false)} patient={patient} />
+      <NewRecordModal open={modalOpen} onClose={() => setModalOpen(false)} patient={patient} onCreate={onCreate} />
     </div>
   );
 }
 
 /* ═══════════════ RECORDS LIST (main view) ═══════════════ */
 export default function Prontuarios() {
+  const { create: createRecord } = useMedicalRecords();
   const [search, setSearch] = useState("");
   const [profFilter, setProfFilter] = useState("all");
   const [selectedPatient, setSelectedPatient] = useState(null);
@@ -667,7 +681,7 @@ export default function Prontuarios() {
   }, [search, profFilter]);
 
   if (selectedPatient) {
-    return <PatientRecordsView patient={selectedPatient} onBack={() => setSelectedPatient(null)} />;
+    return <PatientRecordsView patient={selectedPatient} onBack={() => setSelectedPatient(null)} onCreate={createRecord} />;
   }
 
   return (
