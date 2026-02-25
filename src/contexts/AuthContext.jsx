@@ -28,16 +28,21 @@ export function AuthProvider({ children }) {
   // Fetch user profile from profiles table
   const fetchProfile = useCallback(async (userId) => {
     if (!supabase) return null
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single()
-    if (error) {
-      console.error('Error fetching profile:', error)
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single()
+      if (error) {
+        console.error('Error fetching profile:', error)
+        return null
+      }
+      return data
+    } catch (err) {
+      console.error('Error fetching profile (network):', err)
       return null
     }
-    return data
   }, [])
 
   // Initialize auth state
@@ -51,11 +56,17 @@ export function AuthProvider({ children }) {
 
     // Check existing session
     supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) {
-        setUser(session.user)
-        const prof = await fetchProfile(session.user.id)
-        setProfile(prof)
+      try {
+        if (session?.user) {
+          setUser(session.user)
+          const prof = await fetchProfile(session.user.id)
+          setProfile(prof)
+        }
+      } finally {
+        setLoading(false)
       }
+    }).catch((err) => {
+      console.error('Auth session error:', err)
       setLoading(false)
     })
 
