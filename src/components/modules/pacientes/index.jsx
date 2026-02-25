@@ -26,7 +26,7 @@ function adaptPatient(p, appointments = [], charges = []) {
     status: STATUS_MAP[p.status] || p.status,
     createdAt: p.intake_date || "",
     obs: (p.tags || []).join(", "),
-    address: p.address || "",
+    address: (typeof p.address === 'object' ? (p.address?.text || '') : p.address) || "",
     lastVisit: lastCompleted ? lastCompleted.start_time.split('T')[0] : "",
     totalVisits: completedAppts.length,
     pendingBills: pending,
@@ -146,6 +146,7 @@ function PatientModal({ open, onClose, patient, allPatients, onCreate, onUpdate 
       email: form.email,
       birth_date: form.dob || null,
       health_insurance: form.convenio || null,
+      address: form.address ? { text: form.address } : {},
       tags: form.obs ? form.obs.split(",").map(t => t.trim()).filter(Boolean) : [],
     };
     try {

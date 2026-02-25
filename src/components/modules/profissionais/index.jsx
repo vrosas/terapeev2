@@ -253,7 +253,7 @@ function ServiceModal({open,onClose,service,professionals=[],onCreate,onUpdate})
   const save=async()=>{
     if(!form.name.trim()) return;
     setSaving(true);
-    const payload={name:form.name,category:form.category,duration_minutes:parseInt(form.duration)||50,price:parseFloat(form.price)||0,description:form.description,is_active:form.status==="active"};
+    const payload={name:form.name,category:form.category,duration:parseInt(form.duration)||50,price:parseFloat(form.price)||0,description:form.description,is_active:form.status==="active"};
     const{error}=isEdit?await(onUpdate?.(service.id,payload)??Promise.resolve({})):await(onCreate?.(payload)??Promise.resolve({}));
     setSaving(false);
     if(!error) onClose("saved");
@@ -439,7 +439,7 @@ export default function Profissionais(){
 
   const svcList = useMemo(()=>rawServices.map(s=>({
     id:s.id, name:s.name||'', category:s.category||'',
-    duration:s.duration_minutes||50, price:s.price||0,
+    duration:s.duration||50, price:s.price||0,
     description:s.description||'', status:s.is_active?"active":"inactive",
     color:s.color||T.primary500,
     professionals:(s.service_professionals||[]).map(sp=>sp.professional?.id).filter(Boolean),
